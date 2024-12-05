@@ -1,0 +1,19 @@
+{
+  "name": "class-module",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "airtable": "^0.12.2",
+    "axios": "^1.7.8",
+    "dotenv": "^16.4.5",
+    "stripe": "^17.4.0"
+  }
+}
