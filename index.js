@@ -319,7 +319,7 @@ app.post('/submit-class', async (req, res) => {
   }
 });
 
-syncAirtableToWebflow();
+
 // Run the script
 (async () => {
   try {
