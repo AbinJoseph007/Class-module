@@ -1,7 +1,24 @@
 const Airtable = require('airtable');
 const Stripe = require('stripe');
+const express = require('express');
+const cors = require("cors");
 const axios = require('axios');
 require('dotenv').config();
+
+const app = express();
+app.use(express.json());
+
+const allowedOrigins = [
+  "https://biaw-stage-api.webflow.io",
+];
+app.use(
+  cors({
+    origin: allowedOrigins,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
 
 // Initialize services
 const airtable = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY });
@@ -12,6 +29,7 @@ const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME;
 const WEBFLOW_API_KEY = process.env.WEBFLOW_API_KEY;
 const WEBFLOW_COLLECTION_ID = process.env.WEBFLOW_COLLECTION_ID;
+const AIRTABLE_TABLE_NAME2 = process.env.AIRTABLE_TABLE_NAME2
 
 // Helper function for logging errors
 function logError(context, error) {
@@ -106,6 +124,18 @@ async function createStripeProduct(classDetails) {
   }
 }
 
+// Clean the slug by removing any non-alphabetic characters and keeping only letters and spaces
+function generateSlug(classDetails, dropdownValue) {
+  const cleanedName = classDetails.Name
+    .replace(/[^a-zA-Z\s]/g, '') // Remove anything that isn't a letter or space
+    .toLowerCase()               // Convert to lowercase
+    .replace(/\s+/g, '-')         // Replace spaces with hyphens
+
+  const cleanedDropdownValue = dropdownValue.toLowerCase().replace(/\s+/g, '-');
+
+  return `${cleanedName}-${cleanedDropdownValue}`;
+}
+
 async function addToWebflowCMS(classDetails, stripeInfo) {
   try {
     // Extract instructor name
@@ -118,7 +148,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const instructorPicUrl = instructorPicField && instructorPicField.length > 0 ? instructorPicField[0].url : "";
 
     // Extract multiple image URLs
-    const imagesField = classDetails["Images"]; // Replace with Airtable field for images
+    const imagesField = classDetails["Images"];
     const imageUrls = imagesField && imagesField.length > 0 ? imagesField.map((image) => image.url) : [];
 
     // Extract additional instructor details
@@ -127,49 +157,68 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
 
     const paymentLink = stripeInfo.paymentLink.url; // Use the dynamic payment link from Stripe
 
+    // Loop for creating two entries for "Member" and "Non-Member"
+    for (const dropdownValue of ["Member", "Non-Member"]) {
+      // Determine the values for "member" and "non-member"
+      let memberValue = "No";
+      let nonMemberValue = "No";
 
-    // Prepare API request to Webflow
-    const response = await axios.post(
-      `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`,
-      {
-        fieldData: {
-          name: classDetails.Name,
-          slug: classDetails.Name.toLowerCase().replace(/\s+/g, '-'),
-          description: classDetails.Description || "No description available",
-          "item-id": String(stripeInfo.product.id), // Ensure this is a string
-          "price-member": String(classDetails["Price - Member"]), // Convert to string
-          "price-non-member": String(classDetails["Price - Non Member"]), // Convert to string
-          "member-price-id": String(stripeInfo.memberPrice.id), // Convert to string
-          "non-member-price-id": String(stripeInfo.nonMemberPrice.id), // Convert to string
-          "field-id": String(classDetails["Field ID"]), // Convert to string
-          date: classDetails.Date,
-          "end-date": classDetails["End date"],
-          location: classDetails.Location,
-          "start-time": classDetails["Start Time"],
-          "end-time": classDetails["End Time"],
-          "class-type": classDetails["Product Type"],
-          "instructor-name": instructorName,
-          "instructor-pic": instructorPicUrl,
-          "image-2": imageUrls, // Array of image URLs
-          "instructor-details": instructorDetails,
-          "instructor-company": instructorCompany,
-          "payment-link":paymentLink,
-          "price-roii-participants":classDetails["Price - ROII Participants (Select)"],
-          "created-date":classDetails.Created,
-          "number-of-seats":String(classDetails["Number of seats"]),
-          "airtablerecordid": classDetails.id,
-         },
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+      if (dropdownValue === "Member") {
+        memberValue = "Yes";
+        nonMemberValue = "No";
+      } else if (dropdownValue === "Non-Member") {
+        memberValue = "No";
+        nonMemberValue = "Yes";
       }
-    );
 
-    // Return Webflow API response
-    return response.data;
+      const slug = generateSlug(classDetails, dropdownValue);
+
+      // Prepare API request to Webflow
+      const response = await axios.post(
+        `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`,
+        {
+          fieldData: {
+            name: classDetails.Name,
+            slug: slug,
+            description: classDetails.Description || "No description available",
+            "item-id": String(stripeInfo.product.id),
+            "price-member": String(classDetails["Price - Member"]) ,
+            "price-non-member": String(classDetails["Price - Non Member"]),
+            "member-price-id":  String(stripeInfo.memberPrice.id) ,
+            "non-member-price-id": String(stripeInfo.nonMemberPrice.id) ,
+            "field-id": String(classDetails["Field ID"]),
+            date: classDetails.Date,
+            "end-date": classDetails["End date"],
+            location: classDetails.Location,
+            "start-time": classDetails["Start Time"],
+            "end-time": classDetails["End Time"],
+            "class-type": classDetails["Product Type"],
+            "instructor-name": instructorName,
+            "instructor-pic": instructorPicUrl,
+            "image-2": imageUrls,
+            "main-images": imageUrls,
+            "instructor-details": instructorDetails,
+            "instructor-company": instructorCompany,
+            "payment-link": paymentLink,
+            "price-roii-participants": classDetails["Price - ROII Participants (Select)"],
+            "created-date": classDetails.Created,
+            "number-of-seats": String(classDetails["Number of seats"]),
+            "airtablerecordid": classDetails.id,
+            "member-non-member": dropdownValue, // Add the dropdown field value ("Member" or "Non-Member")
+            "member": memberValue, // Set member value based on dropdown
+            "non-member": nonMemberValue, // Set non-member value based on dropdown
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log(`Successfully added ${dropdownValue} entry for class: ${classDetails.Name}`);
+    }
   } catch (error) {
     if (error.response) {
       console.error("Webflow API Error:", error.response.data);
@@ -179,6 +228,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     throw error;
   }
 }
+
 
 
 // Update Airtable record with Stripe Product ID
@@ -217,6 +267,51 @@ async function processNewClasses() {
   }
 }
 
+app.post('/submit-class', async (req, res) => {
+  const { SignedMemberName, signedmemberemail,timestampField,  clientID, ...fields } = req.body;
+
+  try {
+    const seatRecords = []; // Array to hold the seat records
+
+    // Loop through the submitted fields dynamically
+    for (let i = 1; i <= 10; i++) { // Assuming max 10 seats
+      const name = fields[`P${i}-Name`];
+      const email = fields[`P${i}-Email`];
+      const phone = fields[`P${i}-Phone-number`];
+      const airID =fields['airtable-id'];
+
+      // Skip empty seat data
+      if (!name && !email && !phone) {
+        continue;
+      }
+
+      // Prepare a record for Airtable
+      seatRecords.push({
+        "Name": name || "", // Default to empty string if field is missing
+        "Email": email || "",
+        "Phone Number":phone,
+        "Time Stamp":timestampField,
+        "Purchased class Airtable ID": airID,
+        "Payment Status": "Pending",
+      });
+    }
+
+    // Send each seat record to Airtable
+    const createdRecords = [];
+    for (const record of seatRecords) {
+      const createdRecord = await airtable
+        .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME2)
+        .create(record);
+      createdRecords.push(createdRecord);
+    }
+
+    res.status(200).send({ message: "Class registered successfully", records: createdRecords });
+  } catch (error) {
+    console.error("Error adding records to Airtable", error);
+    res.status(500).send({ message: "Error registering class" });
+  }
+});
+
 // Run the script
 (async () => {
   try {
@@ -227,3 +322,10 @@ async function processNewClasses() {
     logError("Main Process", error);
   }
 })();
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Server is running on http://localhost:${PORT}`);
+});
+
+
