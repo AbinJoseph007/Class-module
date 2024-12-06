@@ -20,6 +20,10 @@ app.use(
   })
 );
 
+app.get("/", (req, res) => {
+  res.send("Server is running and ready to accept requests.");
+});
+
 // Initialize services
 const airtable = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY });
 const stripe = new Stripe(process.env.STRIPE_API_KEY);
@@ -30,6 +34,7 @@ const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME;
 const WEBFLOW_API_KEY = process.env.WEBFLOW_API_KEY;
 const WEBFLOW_COLLECTION_ID = process.env.WEBFLOW_COLLECTION_ID;
 const AIRTABLE_TABLE_NAME2 = process.env.AIRTABLE_TABLE_NAME2
+const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY
 
 // Helper function for logging errors
 function logError(context, error) {
@@ -136,6 +141,7 @@ function generateSlug(classDetails, dropdownValue) {
   return `${cleanedName}-${cleanedDropdownValue}`;
 }
 
+
 async function addToWebflowCMS(classDetails, stripeInfo) {
   try {
     // Extract instructor name
@@ -231,6 +237,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
 
 
 
+
 // Update Airtable record with Stripe Product ID
 async function updateAirtableRecord(recordId, stripeInfo) {
   try {
@@ -312,6 +319,7 @@ app.post('/submit-class', async (req, res) => {
   }
 });
 
+syncAirtableToWebflow();
 // Run the script
 (async () => {
   try {
