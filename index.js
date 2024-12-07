@@ -161,7 +161,6 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
-    const paymentLink = stripeInfo.paymentLink.url; // Use the dynamic payment link from Stripe
 
     // Loop for creating two entries for "Member" and "Non-Member"
     for (const dropdownValue of ["Member", "Non-Member"]) {
@@ -187,11 +186,9 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             name: classDetails.Name,
             slug: slug,
             description: classDetails.Description || "No description available",
-            "item-id": String(stripeInfo.product.id),
             "price-member": String(classDetails["Price - Member"]) ,
             "price-non-member": String(classDetails["Price - Non Member"]),
-            "member-price-id":  String(stripeInfo.memberPrice.id) ,
-            "non-member-price-id": String(stripeInfo.nonMemberPrice.id) ,
+
             "field-id": String(classDetails["Field ID"]),
             date: classDetails.Date,
             "end-date": classDetails["End date"],
@@ -205,7 +202,6 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "main-images": imageUrls,
             "instructor-details": instructorDetails,
             "instructor-company": instructorCompany,
-            "payment-link": paymentLink,
             "price-roii-participants": classDetails["Price - ROII Participants (Select)"],
             "created-date": classDetails.Created,
             "number-of-seats": String(classDetails["Number of seats"]),
@@ -234,6 +230,191 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     throw error;
   }
 }
+
+// async function getAirtableClassRecords() {
+//   const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+//   console.log('Fetching Airtable records from:', url);
+
+//   const response = await fetch(url, {
+//     headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+//   });
+
+//   if (!response.ok) {
+//     console.error('Failed to fetch Airtable records:', response.status, response.statusText);
+//     return [];
+//   }
+
+//   const data = await response.json();
+//   console.log('Received Airtable records:', data.records);
+//   return data.records;
+// }
+
+// // Fetch records from Webflow
+// async function getWebflowRecords() {
+//   const url = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`;
+//   console.log('Fetching Webflow records from:', url);
+
+//   const response = await fetch(url, {
+//     headers: {
+//       Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//       'accept-version': '1.0.0',
+//     },
+//   });
+
+//   if (!response.ok) {
+//     console.error('Failed to fetch Webflow records:', response.status, response.statusText);
+//     return [];
+//   }
+
+//   const data = await response.json();
+//   console.log('Received Webflow records:', data.items);
+//   return data.items;
+// }
+
+// // Check for differences between Airtable and Webflow fields
+// function hasDifferences(airtableFields, webflowFields ) {
+//   return (
+//     airtableFields.Name !== webflowFields.name ||
+//     airtableFields.Description !== webflowFields.description ||
+//     airtableFields.Date !== webflowFields.date ||
+//     airtableFields['End date'] !== webflowFields['end-date'] ||
+//     airtableFields.Location !== webflowFields.location ||
+//     airtableFields['Start time'] !== webflowFields['start-time'] ||
+//     airtableFields['End Time'] !== webflowFields['end-time'] ||
+//     (airtableFields.InstructorNames.join(', ') || 'Instructor Unavailable') !== webflowFields['instructor-name'] ||
+//     airtableFields['Product Type'] !== webflowFields['class-type'] ||
+//     String(airtableFields['Number of seats']) !== String(webflowFields['number-of-seats']) ||
+//     airtableFields['Price - Member'] !== Number(webflowFields['price-member']) ||
+//     airtableFields['Price - Non Member'] !== Number(webflowFields['price-non-member'])
+//   );
+// }
+
+
+
+// // Synchronize Airtable to Webflow
+// async function syncAirtableToWebflow() {
+//   const airtableRecords = await getAirtableClassRecords();
+//   const webflowRecords = await getWebflowRecords();
+
+//   const webflowItemMap = webflowRecords.reduce((map, item) => {
+//     map[item.fieldData.airtablerecordid] = item;
+//     return map;
+//   }, {});
+
+//   const airtableRecordIds = new Set(airtableRecords.map(record => record.id));
+
+//   // Delete Webflow items not in Airtable
+//   for (const webflowItem of webflowRecords) {
+//     if (!airtableRecordIds.has(webflowItem.fieldData.airtablerecordid)) {
+//       await deleteWebflowItem(webflowItem.id);
+//     }
+//   }
+
+//   // Update or add items in Webflow
+//   for (const record of airtableRecords) {
+//     const fields = {
+//       Name: record.fields.Name || '',
+//       Description: record.fields.Description || '',
+//       Date: record.fields.Date || '',
+//       'End date': record.fields['End date'] || '',
+//       Location: record.fields.Location || '',
+//       'Number of seats': record.fields['Number of seats'] || '0',
+//       'Price - Member': record.fields['Price - Member'] || '0',
+//       'Price - Non Member': record.fields['Price - Non Member'] || '0',
+//       airtablerecordid: record.id,
+//     };
+
+//     const webflowItem = webflowItemMap[record.id];
+//     if (webflowItem) {
+//       if (hasDifferences(fields, webflowItem.fieldData)) {
+//         await updateWebflowItem(webflowItem.id, fields);
+//       }
+//     } else {
+//       await addToWebflowCMS(fields);
+//     }
+//   }
+// }
+
+// async function updateWebflowItem(webflowId, fieldsToUpdate) {
+//   const url = `https://api.webflow.com/collections/${WEBFLOW_COLLECTION_ID}/items/${webflowId}`;
+//   console.log('Updating Webflow item:', webflowId);
+
+//   // Structure the fieldData based on the Webflow collection's field names
+//   const fieldData = {
+//     fieldData: {
+//       name: fieldsToUpdate.Name,
+//       description: fieldsToUpdate.Description,
+//       date: fieldsToUpdate.Date,
+//       "end-date": fieldsToUpdate["End date"],
+//       location: fieldsToUpdate.Location,
+//       "start-time": fieldsToUpdate["Start Time"],
+//       "end-time": fieldsToUpdate["End Time"],
+//       "class-type": fieldsToUpdate["Product Type"],
+//       "price-member": fieldsToUpdate["Price - Member"],
+//       "price-non-member": fieldsToUpdate["Price - Non Member"],
+//       "number-of-seats": fieldsToUpdate["Number of seats"],
+//       "airtablerecordid": fieldsToUpdate.airtablerecordid,
+//     }
+//   };
+
+//   try {
+//     const response = await axios.put(
+//       url,
+//       fieldData,
+//       {
+//         headers: {
+//           Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//           'Content-Type': 'application/json',
+//         }
+//       }
+//     );
+
+//     if (response.status === 200) {
+//       console.log(`Successfully updated Webflow item: ${webflowId}`);
+//     } else {
+//       console.error(`Failed to update Webflow item: ${webflowId}`, response.data);
+//     }
+//   } catch (error) {
+//     if (error.response) {
+//       console.error("Error response from Webflow:", error.response.data);
+//     } else {
+//       console.error("Error updating Webflow item:", error.message);
+//     }
+//     throw error;
+//   }
+// }
+
+
+
+// // Delete Webflow item
+// async function deleteWebflowItem(webflowId) {
+//   const url = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items/${webflowId}`;
+//   console.log('Deleting Webflow item:', webflowId);
+
+//   try {
+//     const response = await fetch(url, {
+//       method: 'DELETE',
+//       headers: { Authorization: `Bearer ${WEBFLOW_API_KEY}` },
+//     });
+
+//     if (!response.ok) {
+//       console.error('Failed to delete Webflow item:', await response.json());
+//       return false;
+//     }
+
+//     console.log('Deleted Webflow item:', webflowId);
+//     return true;
+//   } catch (error) {
+//     console.error('Error deleting Webflow item:', error);
+//     return false;
+//   }
+// }
+
+
+
+// // Execute synchronization
+// syncAirtableToWebflow();
+
 
 
 
@@ -275,49 +456,112 @@ async function processNewClasses() {
 }
 
 app.post('/submit-class', async (req, res) => {
-  const { SignedMemberName, signedmemberemail,timestampField,  clientID, ...fields } = req.body;
+  const { SignedMemberName, signedmemberemail, timestampField, ...fields } = req.body;
 
   try {
     const seatRecords = []; // Array to hold the seat records
+    const seatRecordIds = []; // Array to hold the IDs of the seat records
+    const registeredNames = []; // Array to hold the names for Multiple Class Registration field
 
     // Loop through the submitted fields dynamically
     for (let i = 1; i <= 10; i++) { // Assuming max 10 seats
       const name = fields[`P${i}-Name`];
       const email = fields[`P${i}-Email`];
-      const phone = fields[`P${i}-Phone-number`];
-      const airID =fields['airtable-id'];
+      const phone = fields[`P${i}-Phone-number`] || fields[`P${i}-Phone-Number`];
+      const airID = fields['airtable-id'];
 
       // Skip empty seat data
       if (!name && !email && !phone) {
         continue;
       }
 
-      // Prepare a record for Airtable
-      seatRecords.push({
+      // Prepare a record for Airtable (Seats table)
+      const seatRecord = {
         "Name": name || "", // Default to empty string if field is missing
         "Email": email || "",
-        "Phone Number":phone,
-        "Time Stamp":timestampField,
+        "Phone Number": phone || "",
+        "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
-      });
+      };
+
+      seatRecords.push(seatRecord);
     }
 
-    // Send each seat record to Airtable
+    // Send each seat record to Airtable (Seats table)
     const createdRecords = [];
     for (const record of seatRecords) {
       const createdRecord = await airtable
         .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME2)
         .create(record);
+
       createdRecords.push(createdRecord);
+      seatRecordIds.push(createdRecord.id); // Save the record ID for linking
+      registeredNames.push(record["Name"]); // Save the name for other use
     }
 
-    res.status(200).send({ message: "Class registered successfully", records: createdRecords });
+    // Prepare data for Payment Records table
+    const paymentRecord = {
+      "Name": SignedMemberName,
+      "Email": signedmemberemail,
+      "Client ID": fields['field-2'],
+      "Airtable id": fields['airtable-id'],
+      "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
+    };
+
+    // Debugging: Log the payment record data
+    console.log("Payment Record Data:", paymentRecord);
+
+    // Send data to Payment Records table in Airtable
+    let paymentCreatedRecord;
+    try {
+      paymentCreatedRecord = await airtable
+        .base(AIRTABLE_BASE_ID)("Payment Records") // Replace with your actual table name
+        .create(paymentRecord);
+    } catch (paymentError) {
+      console.error("Error adding to Payment Records:", paymentError);
+      return res.status(500).send({ message: "Error registering payment record", error: paymentError });
+    }
+
+    // Successfully created records in both tables
+    res.status(200).send({
+      message: "Class registered successfully",
+      records: createdRecords,
+      paymentRecord: paymentCreatedRecord,
+    });
   } catch (error) {
-    console.error("Error adding records to Airtable", error);
-    res.status(500).send({ message: "Error registering class" });
+    console.error("Error adding records to Airtable:", error);
+    res.status(500).send({ message: "Error registering class", error: error });
   }
 });
+
+
+// Main function to process new classes periodically
+async function processNewClassesPeriodically() {
+  try {
+    console.log("Starting periodic class processing...");
+
+    // Process new classes initially
+    await processNewClasses();
+
+    // Set up an interval to process new classes every 10 minutes (adjust as needed)
+    setInterval(async () => {
+      try {
+        console.log("Checking for new classes...");
+        await processNewClasses();
+        console.log("Periodic check completed.");
+      } catch (error) {
+        logError("Periodic Class Processing", error);
+      }
+    }, 10 * 60 * 1000); // 10 minutes in milliseconds
+  } catch (error) {
+    logError("Initial Process", error);
+  }
+}
+
+// Start the periodic process
+processNewClassesPeriodically();
+
 
 
 (async () => {
