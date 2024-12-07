@@ -506,6 +506,8 @@ app.post('/submit-class', async (req, res) => {
       "Email": signedmemberemail,
       "Client ID": fields['field-2'],
       "Airtable id": fields['airtable-id'],
+      "Client name":SignedMemberName,
+      "Payment Status": "Pending",
       "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
     };
 
