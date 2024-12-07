@@ -320,7 +320,6 @@ app.post('/submit-class', async (req, res) => {
 });
 
 
-// Run the script
 (async () => {
   try {
     console.log("Starting class processing...");
