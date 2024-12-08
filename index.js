@@ -580,6 +580,10 @@ app.post('/submit-class', async (req, res) => {
   }
 });
 
+
+
+// payment updation
+
 const stripes = Stripe(process.env.STRIPE_API_KEY);
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID); // Correct initialization
@@ -664,31 +668,31 @@ app.get('/latest-payment', async (req, res) => {
 
 
 
-// Main function to process new classes periodically
-// async function processNewClassesPeriodically() {
-//   try {
-//     console.log("Starting periodic class processing...");
+//Main function to process new classes periodically
+async function processNewClassesPeriodically() {
+  try {
+    console.log("Starting periodic class processing...");
 
-//     // Process new classes initially
-//     await processNewClasses();
+    // Process new classes initially
+    await processNewClasses();
 
-//     // Set up an interval to process new classes every 10 minutes (adjust as needed)
-//     setInterval(async () => {
-//       try {
-//         console.log("Checking for new classes...");
-//         await processNewClasses();
-//         console.log("Periodic check completed.");
-//       } catch (error) {
-//         logError("Periodic Class Processing", error);
-//       }
-//     }, 10 * 60 * 1000); // 10 minutes in milliseconds
-//   } catch (error) {
-//     logError("Initial Process", error);
-//   }
-// }
+    // Set up an interval to process new classes every 10 minutes (adjust as needed)
+    setInterval(async () => {
+      try {
+        console.log("Checking for new classes...");
+        await processNewClasses();
+        console.log("Periodic check completed.");
+      } catch (error) {
+        logError("Periodic Class Processing", error);
+      }
+    }, 10 * 60 * 1000); // 10 minutes in milliseconds
+  } catch (error) {
+    logError("Initial Process", error);
+  }
+}
 
-// // Start the periodic process
-// processNewClassesPeriodically();
+// Start the periodic process
+processNewClassesPeriodically();
 
 
 
