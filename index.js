@@ -177,7 +177,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
       let memberValue = "No";
       let nonMemberValue = "No";
       let paymentLink = ""; // Initialize payment link for this entry
-    
+
       if (dropdownValue === "Member") {
         memberValue = "Yes";
         nonMemberValue = "No";
@@ -495,7 +495,8 @@ app.post('/submit-class', async (req, res) => {
   try {
     const seatRecords = []; // Array to hold the seat records
     const seatRecordIds = []; // Array to hold the IDs of the seat records
-    const registeredNames = []; // Array to hold the names for Multiple Class Registration field
+    const registeredNames = [];
+    const className = []; // Array to hold the names for Multiple Class Registration field
     let seatCount = 0; // Counter for the number of seats purchased
 
     // Loop through the submitted fields dynamically
@@ -523,13 +524,14 @@ app.post('/submit-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
+
       };
 
       seatRecords.push(seatRecord);
     }
 
     // Send each seat record to Airtable (Seats table)
-    
+
     const createdRecords = [];
     for (const record of seatRecords) {
       const createdRecord = await airtable
@@ -541,6 +543,23 @@ app.post('/submit-class', async (req, res) => {
       registeredNames.push(record["Name"]); // Save the name for other use
     }
 
+    // Query the Biaw Classes table to fetch the correct record ID (Field ID is used for linking)
+    const biawClassesTable = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+      .select({
+        filterByFormula: `{Field ID} = '${fields['airtable-id']}'`, // Ensure this matches the value you're passing
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (biawClassesTable.length === 0) {
+      console.error("No matching record found in Biaw Classes table");
+      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+    }
+
+    const biawClassRecord = biawClassesTable[0];
+    const biawClassId = biawClassRecord.id; // This is the valid Airtable record ID
+
+
     // Prepare data for Payment Records table
     const paymentRecord = {
       "Name": SignedMemberName,
@@ -549,8 +568,11 @@ app.post('/submit-class', async (req, res) => {
       "Airtable id": fields['airtable-id'],
       "Client name": SignedMemberName,
       "Payment Status": "Pending",
+      "Biaw Classes": [fields['airtable-id']], // Ensure this is a valid Airtable record ID, not just a number
       "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
       "Number of seat Purchased": seatCount, // Add the seat count
+      "Biaw Classes": [biawClassId], // This is now a valid record ID from the Biaw Classes table
+
     };
 
     // Debugging: Log the payment record data
@@ -566,7 +588,7 @@ app.post('/submit-class', async (req, res) => {
       console.error("Error adding to Payment Records:", paymentError);
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
     }
-    
+
 
     // Successfully created records in both tables
     res.status(200).send({
