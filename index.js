@@ -3,6 +3,7 @@ const Stripe = require('stripe');
 const express = require('express');
 const cors = require("cors");
 const axios = require('axios');
+const cron = require('node-cron');
 require('dotenv').config();
 
 const app = express();
@@ -35,7 +36,7 @@ const WEBFLOW_API_KEY = process.env.WEBFLOW_API_KEY;
 const WEBFLOW_COLLECTION_ID = process.env.WEBFLOW_COLLECTION_ID;
 const AIRTABLE_TABLE_NAME2 = process.env.AIRTABLE_TABLE_NAME2
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY
-
+const AIRTABLE_TABLE_NAME3 = process.env.AIRTABLE_TABLE_NAME3
 // Helper function for logging errors
 function logError(context, error) {
   console.error(`[ERROR] ${context}:`, error.message || error);
@@ -59,7 +60,7 @@ const parsePrice = (price) => {
       return parsedPrice;
     }
 
-    
+
 
     // If the price is neither a number nor a string, throw an error
     throw new Error("Price is missing or invalid.");
@@ -76,7 +77,7 @@ async function fetchNewClasses() {
       .select({ filterByFormula: "NOT({Item Id})" }) // Fetch only new records
       .all();
     console.log("Fetched new records from Airtable:", records.map((rec) => rec.fields));
-    return records.map((record) => ({ id: record.id, ...record.fields}));
+    return records.map((record) => ({ id: record.id, ...record.fields }));
   } catch (error) {
     logError("Fetching Airtable Records", error);
     return [];
@@ -84,50 +85,59 @@ async function fetchNewClasses() {
 }
 
 // Create a product and prices in Stripe
-async function createStripeProduct(classDetails) {
+async function createStripeProducts(classDetails) {
   try {
-    // Log raw price values for debugging
-    console.log("Raw Member Price:", classDetails["Price - Member"]);
-    console.log("Raw Non-Member Price:", classDetails["Price - Non Member"]);
+    if (!classDetails.Name || !classDetails["Price - Member"] || !classDetails["Price - Non Member"]) {
+      throw new Error("Class details are incomplete");
+    }
 
-    // Parse and validate prices
     const memberPriceAmount = parsePrice(classDetails["Price - Member"]);
     const nonMemberPriceAmount = parsePrice(classDetails["Price - Non Member"]);
 
-    // Create product on Stripe
-    const product = await stripe.products.create({
-      name: classDetails.Name, // "Name" from Airtable
+    const memberProduct = await stripe.products.create({
+      name: `${classDetails.Name} - Member`,
       description: classDetails.Description || "No description provided",
     });
 
-    // Create member price on Stripe
+    const nonMemberProduct = await stripe.products.create({
+      name: `${classDetails.Name} - Non-Member`,
+      description: classDetails.Description || "No description provided",
+    });
+
     const memberPrice = await stripe.prices.create({
-      unit_amount: Math.round(memberPriceAmount * 100), // Convert to cents
+      unit_amount: Math.round(memberPriceAmount * 100),
       currency: 'usd',
-      product: product.id,
+      product: memberProduct.id,
     });
 
-    // Create non-member price on Stripe
     const nonMemberPrice = await stripe.prices.create({
-      unit_amount: Math.round(nonMemberPriceAmount * 100), // Convert to cents
+      unit_amount: Math.round(nonMemberPriceAmount * 100),
       currency: 'usd',
-      product: product.id,
+      product: nonMemberProduct.id,
     });
 
-    // Generate a payment link using the Stripe Payment Links API
-    const paymentLink = await stripe.paymentLinks.create({
-      line_items: [
-        { price: memberPrice.id, quantity: 1 },
-        { price: nonMemberPrice.id, quantity: 1 },
-      ],
+    const memberPaymentLink = await stripe.paymentLinks.create({
+      line_items: [{ price: memberPrice.id, quantity: 1 }],
     });
 
-    return { product, memberPrice, nonMemberPrice ,paymentLink };
+    const nonMemberPaymentLink = await stripe.paymentLinks.create({
+      line_items: [{ price: nonMemberPrice.id, quantity: 1 }],
+    });
+
+    return {
+      memberProduct,
+      memberPrice,
+      memberPaymentLink,
+      nonMemberProduct,
+      nonMemberPrice,
+      nonMemberPaymentLink,
+    };
   } catch (error) {
-    logError("Creating Stripe Product", error);
+    console.error("Error processing class:", error.stack || error.message || error);
     throw error;
   }
 }
+
 
 // Clean the slug by removing any non-alphabetic characters and keeping only letters and spaces
 function generateSlug(classDetails, dropdownValue) {
@@ -161,21 +171,22 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
-
-    // Loop for creating two entries for "Member" and "Non-Member"
+    // Assuming you have the member and non-member payment links
     for (const dropdownValue of ["Member", "Non-Member"]) {
       // Determine the values for "member" and "non-member"
       let memberValue = "No";
       let nonMemberValue = "No";
-
+      let paymentLink = ""; // Initialize payment link for this entry
+    
       if (dropdownValue === "Member") {
         memberValue = "Yes";
         nonMemberValue = "No";
+        paymentLink = stripeInfo.memberPaymentLink.url; // Use member payment link
       } else if (dropdownValue === "Non-Member") {
         memberValue = "No";
         nonMemberValue = "Yes";
+        paymentLink = stripeInfo.nonMemberPaymentLink.url; // Use non-member payment link
       }
-
       const slug = generateSlug(classDetails, dropdownValue);
 
       // Prepare API request to Webflow
@@ -186,13 +197,15 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             name: classDetails.Name,
             slug: slug,
             description: classDetails.Description || "No description available",
-            "price-member": String(classDetails["Price - Member"]) ,
+            "price-member": String(classDetails["Price - Member"]),
             "price-non-member": String(classDetails["Price - Non Member"]),
-
+            "member-price-id": String(stripeInfo.memberPrice.id),
+            "non-member-price-id": String(stripeInfo.nonMemberPrice.id),
             "field-id": String(classDetails["Field ID"]),
             date: classDetails.Date,
             "end-date": classDetails["End date"],
             location: classDetails.Location,
+            "payment-link": paymentLink,
             "start-time": classDetails["Start Time"],
             "end-time": classDetails["End Time"],
             "class-type": classDetails["Product Type"],
@@ -422,14 +435,33 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
 // Update Airtable record with Stripe Product ID
 async function updateAirtableRecord(recordId, stripeInfo) {
   try {
+    // Validate recordId
+    if (!recordId) {
+      throw new Error("Invalid recordId: recordId is undefined or empty.");
+    }
+
+    // Log the inputs for debugging
+    console.log("Record ID:", recordId);
+    console.log("Stripe Info:", stripeInfo);
+
+    // Perform the update
     await airtable.base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME).update(recordId, {
-      "Item Id": stripeInfo.product.id, // Maps to "Item Id" in Airtable
+      "Item Id": stripeInfo?.product?.id ?? "Unknown Product ID",
+      "Member Price ID": String(stripeInfo?.memberPrice?.id ?? "Unknown Member Price ID"),
+      "Non-Member Price ID": String(stripeInfo?.nonMemberPrice?.id ?? "Unknown Non-Member Price ID"),
     });
+
+    console.log("Airtable record updated successfully!");
   } catch (error) {
-    logError("Updating Airtable Record", error);
+    console.error("Error updating Airtable Record:", {
+      recordId,
+      stripeInfo,
+      error: error.message,
+    });
     throw error;
   }
 }
+
 
 // Main function to process new classes
 async function processNewClasses() {
@@ -440,7 +472,7 @@ async function processNewClasses() {
       console.log(`Processing class: ${classDetails.Name}`); // Log class name
 
       // Create Stripe product and prices
-      const stripeInfo = await createStripeProduct(classDetails);
+      const stripeInfo = await createStripeProducts(classDetails);
 
       // Add class to Webflow CMS
       await addToWebflowCMS(classDetails, stripeInfo);
@@ -455,6 +487,8 @@ async function processNewClasses() {
   }
 }
 
+//class registration form submission
+
 app.post('/submit-class', async (req, res) => {
   const { SignedMemberName, signedmemberemail, timestampField, ...fields } = req.body;
 
@@ -462,6 +496,7 @@ app.post('/submit-class', async (req, res) => {
     const seatRecords = []; // Array to hold the seat records
     const seatRecordIds = []; // Array to hold the IDs of the seat records
     const registeredNames = []; // Array to hold the names for Multiple Class Registration field
+    let seatCount = 0; // Counter for the number of seats purchased
 
     // Loop through the submitted fields dynamically
     for (let i = 1; i <= 10; i++) { // Assuming max 10 seats
@@ -473,6 +508,11 @@ app.post('/submit-class', async (req, res) => {
       // Skip empty seat data
       if (!name && !email && !phone) {
         continue;
+      }
+
+      // Increment seat count for non-empty names
+      if (name) {
+        seatCount++;
       }
 
       // Prepare a record for Airtable (Seats table)
@@ -489,6 +529,7 @@ app.post('/submit-class', async (req, res) => {
     }
 
     // Send each seat record to Airtable (Seats table)
+    
     const createdRecords = [];
     for (const record of seatRecords) {
       const createdRecord = await airtable
@@ -506,9 +547,10 @@ app.post('/submit-class', async (req, res) => {
       "Email": signedmemberemail,
       "Client ID": fields['field-2'],
       "Airtable id": fields['airtable-id'],
-      "Client name":SignedMemberName,
+      "Client name": SignedMemberName,
       "Payment Status": "Pending",
       "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
+      "Number of seat Purchased": seatCount, // Add the seat count
     };
 
     // Debugging: Log the payment record data
@@ -524,6 +566,7 @@ app.post('/submit-class', async (req, res) => {
       console.error("Error adding to Payment Records:", paymentError);
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
     }
+    
 
     // Successfully created records in both tables
     res.status(200).send({
@@ -537,32 +580,115 @@ app.post('/submit-class', async (req, res) => {
   }
 });
 
+const stripes = Stripe(process.env.STRIPE_API_KEY);
+
+const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID); // Correct initialization
+
+
+// Function to check and update payments
+const checkAndPushPayments = async () => {
+  try {
+    console.log('Checking for new payments...');
+
+    // Fetch the latest charge from Stripe (only the most recent one)
+    const charges = await stripes.charges.list({ limit: 1 });
+    const latestCharge = charges.data[0];  // Get the most recent charge
+
+    // If there's no charge found, log and return
+    if (!latestCharge) {
+      console.log('No new payments found');
+      return;
+    }
+
+    const paymentId = latestCharge.id;
+    const amountTotal = latestCharge.amount / 100;  // Convert from cents to dollars
+    const paymentStatus = latestCharge.status;
+    const email = latestCharge.billing_details?.email || null;
+
+    // If no email is found in the charge, log and return
+    if (!email) {
+      console.log('No email found in Stripe payment details');
+      return;
+    }
+
+    console.log('Latest Charge:', { paymentId, amountTotal, paymentStatus, email });
+
+    // Check if a record with the same email already exists in Airtable
+    const matchingRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
+      .select({ filterByFormula: `{Email} = '${email}'` })  // Match by email
+      .firstPage();
+
+    // If matching email exists in Airtable, update the corresponding record
+    if (matchingRecords.length > 0) {
+      const recordId = matchingRecords[0].id;
+      const updatedFields = {
+        "Payment ID": paymentId,
+        "Amount Total": new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+        }).format(amountTotal),  // Format the amount as currency
+        "Payment Status": paymentStatus === 'succeeded' ? 'Paid' : 'Failed',
+      };
+
+      console.log('Updating existing record in Airtable:', updatedFields);
+
+      // Update the existing record in Airtable
+      await airtableBase(AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
+
+      console.log('Payment record successfully updated in Airtable.');
+    } else {
+      console.log('No matching email found in Airtable.');
+    }
+  } catch (error) {
+    console.error('Error in checkAndPushPayments:', error);
+  }
+};
+
+// Cron job to run every minute (you can adjust this frequency as per your needs)
+cron.schedule('*/1 * * * *', async () => {
+  console.log('Running scheduled job: Checking for new payments...');
+  await checkAndPushPayments();
+});
+
+// Manual route to trigger payment check (can be used for testing or manually triggering updates)
+app.get('/latest-payment', async (req, res) => {
+  try {
+    console.log('Manual request: Checking for new payments...');
+    await checkAndPushPayments();
+    res.status(200).json({ message: 'Payment check completed' });
+  } catch (error) {
+    console.error('Error in /latest-payment route:', error);
+    res.status(500).json({ message: 'Error processing payment', error });
+  }
+});
+
+
 
 // Main function to process new classes periodically
-async function processNewClassesPeriodically() {
-  try {
-    console.log("Starting periodic class processing...");
+// async function processNewClassesPeriodically() {
+//   try {
+//     console.log("Starting periodic class processing...");
 
-    // Process new classes initially
-    await processNewClasses();
+//     // Process new classes initially
+//     await processNewClasses();
 
-    // Set up an interval to process new classes every 10 minutes (adjust as needed)
-    setInterval(async () => {
-      try {
-        console.log("Checking for new classes...");
-        await processNewClasses();
-        console.log("Periodic check completed.");
-      } catch (error) {
-        logError("Periodic Class Processing", error);
-      }
-    }, 10 * 60 * 1000); // 10 minutes in milliseconds
-  } catch (error) {
-    logError("Initial Process", error);
-  }
-}
+//     // Set up an interval to process new classes every 10 minutes (adjust as needed)
+//     setInterval(async () => {
+//       try {
+//         console.log("Checking for new classes...");
+//         await processNewClasses();
+//         console.log("Periodic check completed.");
+//       } catch (error) {
+//         logError("Periodic Class Processing", error);
+//       }
+//     }, 10 * 60 * 1000); // 10 minutes in milliseconds
+//   } catch (error) {
+//     logError("Initial Process", error);
+//   }
+// }
 
-// Start the periodic process
-processNewClassesPeriodically();
+// // Start the periodic process
+// processNewClassesPeriodically();
 
 
 
@@ -575,6 +701,7 @@ processNewClassesPeriodically();
     logError("Main Process", error);
   }
 })();
+
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
