@@ -151,7 +151,7 @@ function generateSlug(classDetails, dropdownValue) {
   return `${cleanedName}-${cleanedDropdownValue}`;
 }
 
-
+// function to add cms class
 async function addToWebflowCMS(classDetails, stripeInfo) {
   try {
     // Extract instructor name
@@ -565,7 +565,6 @@ app.post('/submit-class', async (req, res) => {
 
     try {
       await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
-        "Number of seats": updatedSeats,
         "Number of seats remaining": updatedSeats.toString(), // Convert to string for single-line text
       });
     } catch (updateError) {
