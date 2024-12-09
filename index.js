@@ -496,7 +496,6 @@ app.post('/submit-class', async (req, res) => {
     const seatRecords = []; // Array to hold the seat records
     const seatRecordIds = []; // Array to hold the IDs of the seat records
     const registeredNames = [];
-    const className = []; // Array to hold the names for Multiple Class Registration field
     let seatCount = 0; // Counter for the number of seats purchased
 
     // Loop through the submitted fields dynamically
@@ -524,14 +523,12 @@ app.post('/submit-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
-
       };
 
       seatRecords.push(seatRecord);
     }
 
     // Send each seat record to Airtable (Seats table)
-
     const createdRecords = [];
     for (const record of seatRecords) {
       const createdRecord = await airtable
@@ -559,6 +556,22 @@ app.post('/submit-class', async (req, res) => {
     const biawClassRecord = biawClassesTable[0];
     const biawClassId = biawClassRecord.id; // This is the valid Airtable record ID
 
+    // Update the Number of seats in the Biaw Classes table
+    const currentSeats = biawClassRecord.fields["Number of seats"];
+    if (currentSeats < seatCount) {
+      return res.status(400).send({ message: "Not enough seats available for this class." });
+    }
+    const updatedSeats = currentSeats - seatCount;
+
+    try {
+      await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
+        "Number of seats": updatedSeats,
+        "Number of seats remaining": updatedSeats.toString(), // Convert to string for single-line text
+      });
+    } catch (updateError) {
+      console.error("Error updating the Number of seats:", updateError);
+      return res.status(500).send({ message: "Error updating the number of seats", error: updateError });
+    }
 
     // Prepare data for Payment Records table
     const paymentRecord = {
@@ -572,11 +585,7 @@ app.post('/submit-class', async (req, res) => {
       "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
       "Number of seat Purchased": seatCount, // Add the seat count
       "Biaw Classes": [biawClassId], // This is now a valid record ID from the Biaw Classes table
-
     };
-
-    // Debugging: Log the payment record data
-    console.log("Payment Record Data:", paymentRecord);
 
     // Send data to Payment Records table in Airtable
     let paymentCreatedRecord;
@@ -589,7 +598,6 @@ app.post('/submit-class', async (req, res) => {
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
     }
 
-
     // Successfully created records in both tables
     res.status(200).send({
       message: "Class registered successfully",
@@ -601,6 +609,7 @@ app.post('/submit-class', async (req, res) => {
     res.status(500).send({ message: "Error registering class", error: error });
   }
 });
+
 
 
 
