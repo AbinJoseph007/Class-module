@@ -615,7 +615,8 @@ app.post('/submit-class', async (req, res) => {
       "Number of seat Purchased": seatCount, // Add the seat count
       "Biaw Classes": [biawClassId],
       // This is now a valid record ID from the Biaw Classes table
-      "Booking Type": "User booked"
+      "Booking Type": "User booked",
+      "ROII member":"No"
     };
 
     // Send data to Payment Records table in Airtable
