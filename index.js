@@ -25,11 +25,9 @@ app.get("/", (req, res) => {
   res.send("Server is running and ready to accept requests.");
 });
 
-// Initialize services
 const airtable = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY });
 const stripe = new Stripe(process.env.STRIPE_API_KEY);
 
-// Configurations
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID;
 const AIRTABLE_TABLE_NAME = process.env.AIRTABLE_TABLE_NAME;
 const WEBFLOW_API_KEY = process.env.WEBFLOW_API_KEY;
@@ -37,7 +35,7 @@ const WEBFLOW_COLLECTION_ID = process.env.WEBFLOW_COLLECTION_ID;
 const AIRTABLE_TABLE_NAME2 = process.env.AIRTABLE_TABLE_NAME2
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY
 const AIRTABLE_TABLE_NAME3 = process.env.AIRTABLE_TABLE_NAME3
-// Helper function for logging errors
+
 function logError(context, error) {
   console.error(`[ERROR] ${context}:`, error.message || error);
 }
@@ -45,14 +43,12 @@ function logError(context, error) {
 // Helper function to parse price values
 const parsePrice = (price) => {
   try {
-    // Check if the price is a number
     if (typeof price === "number") {
       return price;
     }
 
-    // If it's a string, clean and parse it
     if (typeof price === "string") {
-      const cleanedPrice = price.replace(/[$,]/g, ''); // Remove $ and commas
+      const cleanedPrice = price.replace(/[$,]/g, ''); 
       const parsedPrice = parseFloat(cleanedPrice);
       if (isNaN(parsedPrice)) {
         throw new Error(`Invalid price value: ${price}`);
@@ -60,9 +56,6 @@ const parsePrice = (price) => {
       return parsedPrice;
     }
 
-
-
-    // If the price is neither a number nor a string, throw an error
     throw new Error("Price is missing or invalid.");
   } catch (error) {
     throw new Error(`Price parsing failed: ${error.message}`);
@@ -74,7 +67,7 @@ async function fetchNewClasses() {
   try {
     const records = await airtable
       .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME)
-      .select({ filterByFormula: "NOT({Item Id})" }) // Fetch only new records
+      .select({ filterByFormula: "NOT({Item Id})" }) 
       .all();
     console.log("Fetched new records from Airtable:", records.map((rec) => rec.fields));
     return records.map((record) => ({ id: record.id, ...record.fields }));
@@ -142,9 +135,9 @@ async function createStripeProducts(classDetails) {
 // Clean the slug by removing any non-alphabetic characters and keeping only letters and spaces
 function generateSlug(classDetails, dropdownValue) {
   const cleanedName = classDetails.Name
-    .replace(/[^a-zA-Z\s]/g, '') // Remove anything that isn't a letter or space
-    .toLowerCase()               // Convert to lowercase
-    .replace(/\s+/g, '-')         // Replace spaces with hyphens
+    .replace(/[^a-zA-Z\s]/g, '') 
+    .toLowerCase()              
+    .replace(/\s+/g, '-')         
 
   const cleanedDropdownValue = dropdownValue.toLowerCase().replace(/\s+/g, '-');
 
@@ -154,38 +147,32 @@ function generateSlug(classDetails, dropdownValue) {
 // function to add cms class
 async function addToWebflowCMS(classDetails, stripeInfo) {
   try {
-    // Extract instructor name
     const instructorName = Array.isArray(classDetails["Instructor Name (from Instructors)"])
       ? classDetails["Instructor Name (from Instructors)"].join(", ")
       : classDetails["Instructor Name (from Instructors)"];
 
-    // Extract instructor pic URL
     const instructorPicField = classDetails["Instructor Pic (from Instructors)"];
     const instructorPicUrl = instructorPicField && instructorPicField.length > 0 ? instructorPicField[0].url : "";
 
-    // Extract multiple image URLs
     const imagesField = classDetails["Images"];
     const imageUrls = imagesField && imagesField.length > 0 ? imagesField.map((image) => image.url) : [];
 
-    // Extract additional instructor details
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
-    // Assuming you have the member and non-member payment links
     for (const dropdownValue of ["Member", "Non-Member"]) {
-      // Determine the values for "member" and "non-member"
       let memberValue = "No";
       let nonMemberValue = "No";
-      let paymentLink = ""; // Initialize payment link for this entry
+      let paymentLink = ""; 
 
       if (dropdownValue === "Member") {
         memberValue = "Yes";
         nonMemberValue = "No";
-        paymentLink = stripeInfo.memberPaymentLink.url; // Use member payment link
+        paymentLink = stripeInfo.memberPaymentLink.url; 
       } else if (dropdownValue === "Non-Member") {
         memberValue = "No";
         nonMemberValue = "Yes";
-        paymentLink = stripeInfo.nonMemberPaymentLink.url; // Use non-member payment link
+        paymentLink = stripeInfo.nonMemberPaymentLink.url; 
       }
       const slug = generateSlug(classDetails, dropdownValue);
 
@@ -219,9 +206,9 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "created-date": classDetails.Created,
             "number-of-seats": String(classDetails["Number of seats"]),
             "airtablerecordid": classDetails.id,
-            "member-non-member": dropdownValue, // Add the dropdown field value ("Member" or "Non-Member")
-            "member": memberValue, // Set member value based on dropdown
-            "non-member": nonMemberValue, // Set non-member value based on dropdown
+            "member-non-member": dropdownValue, 
+            "member": memberValue, 
+            "non-member": nonMemberValue, 
           },
         },
         {
@@ -493,59 +480,55 @@ app.post('/submit-class', async (req, res) => {
   const { SignedMemberName, signedmemberemail, timestampField, ...fields } = req.body;
 
   try {
-    const seatRecords = []; // Array to hold the seat records
-    const seatRecordIds = []; // Array to hold the IDs of the seat records
+    const seatRecords = [];
+    const seatRecordIds = []; 
     const registeredNames = [];
-    let seatCount = 0; // Counter for the number of seats purchased
+    let seatCount = 0; 
 
-    // Loop through the submitted fields dynamically
-    for (let i = 1; i <= 10; i++) { // Assuming max 10 seats
+    
+    for (let i = 1; i <= 10; i++) { 
       const name = fields[`P${i}-Name`];
       const email = fields[`P${i}-Email`];
       const phone = fields[`P${i}-Phone-number`] || fields[`P${i}-Phone-Number`];
       const airID = fields['airtable-id'];
 
-      // Skip empty seat data
       if (!name && !email && !phone) {
         continue;
       }
 
-      // Increment seat count for non-empty names
       if (name) {
         seatCount++;
       }
 
       const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
-      .select({
-        filterByFormula: `{Field ID} = ${airID}`, // Ensure this matches the value you're passing
-        maxRecords: 1,
-      })
-      .firstPage();
+        .select({
+          filterByFormula: `{Field ID} = ${airID}`, 
+          maxRecords: 1,
+        })
+        .firstPage();
 
-    if (biawClassesTables.length === 0) {
-      console.error("No matching record found in Biaw Classes table");
-      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
-    }
+      if (biawClassesTables.length === 0) {
+        console.error("No matching record found in Biaw Classes table");
+        return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+      }
 
-    const biawClassRecords = biawClassesTables[0];
-    const biawClassIds = biawClassRecords.id;
+      const biawClassRecords = biawClassesTables[0];
+      const biawClassIds = biawClassRecords.id;
 
-      // Prepare a record for Airtable (Seats table)
       const seatRecord = {
-        "Name": name || "", // Default to empty string if field is missing
+        "Name": name || "", 
         "Email": email || "",
         "Phone Number": phone || "",
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
-        "Biaw Classes": [biawClassIds], // Ensure this is a valid Airtable record ID, not just a number
+        "Biaw Classes": [biawClassIds], 
 
       };
 
       seatRecords.push(seatRecord);
     }
 
-    // Send each seat record to Airtable (Seats table)
     const createdRecords = [];
     for (const record of seatRecords) {
       const createdRecord = await airtable
@@ -553,14 +536,13 @@ app.post('/submit-class', async (req, res) => {
         .create(record);
 
       createdRecords.push(createdRecord);
-      seatRecordIds.push(createdRecord.id); // Save the record ID for linking
-      registeredNames.push(record["Name"]); // Save the name for other use
+      seatRecordIds.push(createdRecord.id); 
+      registeredNames.push(record["Name"]); 
     }
 
-    // Query the Biaw Classes table to fetch the correct record ID (Field ID is used for linking)
     const biawClassesTable = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
       .select({
-        filterByFormula: `{Field ID} = '${fields['airtable-id']}'`, // Ensure this matches the value you're passing
+        filterByFormula: `{Field ID} = '${fields['airtable-id']}'`, 
         maxRecords: 1,
       })
       .firstPage();
@@ -571,28 +553,28 @@ app.post('/submit-class', async (req, res) => {
     }
 
     const biawClassRecord = biawClassesTable[0];
-    const biawClassId = biawClassRecord.id; // This is the valid Airtable record ID
+    const biawClassId = biawClassRecord.id; 
 
-    // Fetch the current number of remaining seats and total purchased seats
+   
     let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
-    let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10); // Default to 0 if field is missing
+    let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10); 
 
-    // Check if there are enough seats available for this purchase
+    
     if (currentSeatsRemaining < seatCount) {
       return res.status(400).send({ message: "Not enough seats available for this class." });
     }
 
-    // Deduct the number of purchased seats from the remaining seats
+    
     const updatedSeatsRemaining = currentSeatsRemaining - seatCount;
 
-    // Update the total number of purchased seats
+    
     const updatedTotalPurchasedSeats = totalPurchasedSeats + seatCount;
 
     try {
-      // Update both "Number of seats remaining" and "Total Number of Purchased Seats" in the Airtable record
+      
       await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
-        "Number of seats remaining": updatedSeatsRemaining.toString(), // Convert to string for Airtable
-        "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(), // Convert to string for Airtable
+        "Number of seats remaining": updatedSeatsRemaining.toString(), 
+        "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(), 
       });
 
       console.log(`Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`);
@@ -602,7 +584,6 @@ app.post('/submit-class', async (req, res) => {
     }
 
 
-    // Prepare data for Payment Records table
     const paymentRecord = {
       "Name": SignedMemberName,
       "Email": signedmemberemail,
@@ -610,27 +591,26 @@ app.post('/submit-class', async (req, res) => {
       "Airtable id": fields['airtable-id'],
       "Client name": SignedMemberName,
       "Payment Status": "Pending",
-      "Biaw Classes": [fields['airtable-id']], // Ensure this is a valid Airtable record ID, not just a number
-      "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
-      "Number of seat Purchased": seatCount, // Add the seat count
+      "Biaw Classes": [fields['airtable-id']], 
+      "Multiple Class Registration": seatRecordIds,
+      "Number of seat Purchased": seatCount, 
       "Biaw Classes": [biawClassId],
-      // This is now a valid record ID from the Biaw Classes table
       "Booking Type": "User booked",
-      "ROII member":"No"
+      "ROII member": "No"
     };
 
-    // Send data to Payment Records table in Airtable
+    
     let paymentCreatedRecord;
     try {
       paymentCreatedRecord = await airtable
-        .base(AIRTABLE_BASE_ID)("Payment Records") // Replace with your actual table name
+        .base(AIRTABLE_BASE_ID)("Payment Records")
         .create(paymentRecord);
     } catch (paymentError) {
       console.error("Error adding to Payment Records:", paymentError);
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
     }
 
-    // Successfully created records in both tables
+    
     res.status(200).send({
       message: "Class registered successfully",
       records: createdRecords,
@@ -649,18 +629,18 @@ app.post('/register-class', async (req, res) => {
   const { memberid, timestampField, ...fields } = req.body;
 
   try {
-    const seatRecords = []; // Array to hold the seat records
-    const seatRecordIds = []; // Array to hold the IDs of the seat records
+    const seatRecords = []; 
+    const seatRecordIds = []; 
     const registeredNames = [];
-    let seatCount = 0; // Counter for the number of seats purchased
+    let seatCount = 0;
 
     // Loop through the submitted fields dynamically
     for (let i = 1; i <= 10; i++) { // Assuming max 10 seats
       const Rname = fields[`Roii-P-${i}-Name`];
-      const Remail = fields[`Roii-P-${i}-Email`] || fields[`P${i}-Email-2`] ;
+      const Remail = fields[`Roii-P-${i}-Email`] || fields[`P${i}-Email-2`];
       const Rphone = fields[`Roii-P-${i}-Phone-Number`] || fields[`P${i}-Phone-Number-2`];
       const airID = fields['airtable-id'];
-      
+
       // Skip empty seat data
       if (!Rname && !Remail && !Rphone) {
         continue;
@@ -672,34 +652,32 @@ app.post('/register-class', async (req, res) => {
       }
 
       const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
-      .select({
-        filterByFormula: `{Field ID} = ${airID}`, // Ensure this matches the value you're passing
-        maxRecords: 1,
-      })
-      .firstPage();
+        .select({
+          filterByFormula: `{Field ID} = ${airID}`,
+          maxRecords: 1,
+        })
+        .firstPage();
 
-    if (biawClassesTables.length === 0) {
-      console.error("No matching record found in Biaw Classes table");
-      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
-    }
+      if (biawClassesTables.length === 0) {
+        console.error("No matching record found in Biaw Classes table");
+        return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+      }
 
-    const biawClassRecords = biawClassesTables[0];
-    const biawClassIds = biawClassRecords.id; // This is the valid Airtable record ID
+      const biawClassRecords = biawClassesTables[0];
+      const biawClassIds = biawClassRecords.id; 
 
-      // Prepare a record for Airtable (Seats table)
       const seatRecord = {
-        "Name": Rname || "", // Default to empty string if field is missing
+        "Name": Rname || "", 
         "Email": Remail || "",
         "Phone Number": Rphone || "",
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
-        "Biaw Classes": [biawClassIds], // Ensure this is a valid Airtable record ID, not just a number
+        "Biaw Classes": [biawClassIds], 
       };
 
       seatRecords.push(seatRecord);
     }
 
-    // Send each seat record to Airtable (Seats table)
     const createdRecords = [];
     for (const record of seatRecords) {
       const createdRecord = await airtable
@@ -707,14 +685,13 @@ app.post('/register-class', async (req, res) => {
         .create(record);
 
       createdRecords.push(createdRecord);
-      seatRecordIds.push(createdRecord.id); // Save the record ID for linking
-      registeredNames.push(record["Name"]); // Save the name for other use
+      seatRecordIds.push(createdRecord.id);
+      registeredNames.push(record["Name"]); 
     }
 
-    // Query the Biaw Classes table to fetch the correct record ID (Field ID is used for linking)
     const biawClassesTable = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
       .select({
-        filterByFormula: `{Field ID} = '${fields['airtable-id']}'`, // Ensure this matches the value you're passing
+        filterByFormula: `{Field ID} = '${fields['airtable-id']}'`, 
         maxRecords: 1,
       })
       .firstPage();
@@ -725,28 +702,23 @@ app.post('/register-class', async (req, res) => {
     }
 
     const biawClassRecord = biawClassesTable[0];
-    const biawClassId = biawClassRecord.id; // This is the valid Airtable record ID
+    const biawClassId = biawClassRecord.id; 
 
-    // Fetch the current number of remaining seats and total purchased seats
     let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
-    let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10); // Default to 0 if field is missing
+    let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10); 
 
-    // Check if there are enough seats available for this purchase
     if (currentSeatsRemaining < seatCount) {
       return res.status(400).send({ message: "Not enough seats available for this class." });
     }
 
-    // Deduct the number of purchased seats from the remaining seats
     const updatedSeatsRemaining = currentSeatsRemaining - seatCount;
 
-    // Update the total number of purchased seats
     const updatedTotalPurchasedSeats = totalPurchasedSeats + seatCount;
 
     try {
-      // Update both "Number of seats remaining" and "Total Number of Purchased Seats" in the Airtable record
       await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
-        "Number of seats remaining": updatedSeatsRemaining.toString(), // Convert to string for Airtable
-        "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(), // Convert to string for Airtable
+        "Number of seats remaining": updatedSeatsRemaining.toString(), 
+        "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(),
       });
 
       console.log(`Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`);
@@ -754,11 +726,9 @@ app.post('/register-class', async (req, res) => {
       console.error("Error updating the seats:", updateError);
       return res.status(500).send({ message: "Error updating the seat information", error: updateError });
     }
+    const signEmail = fields['roii-signedmemberemail'];
+    const signName = fields["roii-signed-member-name"];
 
-      const signEmail = fields['roii-signedmemberemail'];
-      const signName = fields["roii-signed-member-name"];
-
-    // Prepare data for Payment Records table
     const paymentRecord = {
       "Name": signName,
       "Email": signEmail,
@@ -766,28 +736,24 @@ app.post('/register-class', async (req, res) => {
       "Airtable id": fields['airtable-id'],
       "Client name": signName,
       "Payment Status": "ROII-Free",
-      "Biaw Classes": [fields['airtable-id']], // Ensure this is a valid Airtable record ID, not just a number
-      "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
-      "Number of seat Purchased": seatCount, // Add the seat count
+      "Biaw Classes": [fields['airtable-id']],
+      "Multiple Class Registration": seatRecordIds,
+      "Number of seat Purchased": seatCount, 
       "Biaw Classes": [biawClassId],
-      // This is now a valid record ID from the Biaw Classes table
       "Booking Type": "User booked",
-      "ROII member":"Yes"
+      "ROII member": "Yes"
 
     };
-
-    // Send data to Payment Records table in Airtable
     let paymentCreatedRecord;
     try {
       paymentCreatedRecord = await airtable
-        .base(AIRTABLE_BASE_ID)("Payment Records") // Replace with your actual table name
+        .base(AIRTABLE_BASE_ID)("Payment Records") 
         .create(paymentRecord);
     } catch (paymentError) {
       console.error("Error adding to Payment Records:", paymentError);
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
     }
 
-    // Successfully created records in both tables
     res.status(200).send({
       message: "Class registered successfully",
       records: createdRecords,
@@ -813,23 +779,19 @@ const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base
 const checkAndPushPayments = async () => {
   try {
     console.log('Checking for new payments...');
-
-    // Fetch the latest charge from Stripe (only the most recent one)
     const charges = await stripes.charges.list({ limit: 1 });
-    const latestCharge = charges.data[0];  // Get the most recent charge
+    const latestCharge = charges.data[0];  
 
-    // If there's no charge found, log and return
     if (!latestCharge) {
       console.log('No new payments found');
       return;
     }
 
     const paymentId = latestCharge.id;
-    const amountTotal = latestCharge.amount / 100;  // Convert from cents to dollars
+    const amountTotal = latestCharge.amount / 100;  
     const paymentStatus = latestCharge.status;
     const email = latestCharge.billing_details?.email || null;
 
-    // If no email is found in the charge, log and return
     if (!email) {
       console.log('No email found in Stripe payment details');
       return;
@@ -837,12 +799,10 @@ const checkAndPushPayments = async () => {
 
     console.log('Latest Charge:', { paymentId, amountTotal, paymentStatus, email });
 
-    // Check if a record with the same email already exists in Airtable
     const matchingRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
       .select({ filterByFormula: `{Email} = '${email}'` })  // Match by email
       .firstPage();
 
-    // If matching email exists in Airtable, update the corresponding record
     if (matchingRecords.length > 0) {
       const recordId = matchingRecords[0].id;
       const updatedFields = {
@@ -850,15 +810,11 @@ const checkAndPushPayments = async () => {
         "Amount Total": new Intl.NumberFormat('en-US', {
           style: 'currency',
           currency: 'USD',
-        }).format(amountTotal),  // Format the amount as currency
+        }).format(amountTotal),  
         "Payment Status": paymentStatus === 'succeeded' ? 'Paid' : 'Failed',
       };
-
       console.log('Updating existing record in Airtable:', updatedFields);
-
-      // Update the existing record in Airtable
       await airtableBase(AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
-
       console.log('Payment record successfully updated in Airtable.');
     } else {
       console.log('No matching email found in Airtable.');
@@ -868,13 +824,11 @@ const checkAndPushPayments = async () => {
   }
 };
 
-// Cron job to run every minute (you can adjust this frequency as per your needs)
 cron.schedule('*/1 * * * *', async () => {
   console.log('Running scheduled job: Checking for new payments...');
   await checkAndPushPayments();
 });
 
-// Manual route to trigger payment check (can be used for testing or manually triggering updates)
 app.get('/latest-payment', async (req, res) => {
   try {
     console.log('Manual request: Checking for new payments...');
@@ -893,10 +847,8 @@ async function processNewClassesPeriodically() {
   try {
     console.log("Starting periodic class processing...");
 
-    // Process new classes initially
     await processNewClasses();
 
-    // Set up an interval to process new classes every 10 minutes (adjust as needed)
     setInterval(async () => {
       try {
         console.log("Checking for new classes...");
@@ -905,7 +857,7 @@ async function processNewClassesPeriodically() {
       } catch (error) {
         logError("Periodic Class Processing", error);
       }
-    }, 10 * 60 * 1000); // 10 minutes in milliseconds
+    }, 10 * 60 * 1000); 
   } catch (error) {
     logError("Initial Process", error);
   }
