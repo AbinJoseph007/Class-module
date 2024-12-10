@@ -556,8 +556,9 @@ app.post('/submit-class', async (req, res) => {
     const biawClassRecord = biawClassesTable[0];
     const biawClassId = biawClassRecord.id; // This is the valid Airtable record ID
 
-    // Fetch the current number of remaining seats
+    // Fetch the current number of remaining seats and total purchased seats
     let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
+    let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10); // Default to 0 if field is missing
 
     // Check if there are enough seats available for this purchase
     if (currentSeatsRemaining < seatCount) {
@@ -565,18 +566,22 @@ app.post('/submit-class', async (req, res) => {
     }
 
     // Deduct the number of purchased seats from the remaining seats
-    const updatedSeats = currentSeatsRemaining - seatCount;
+    const updatedSeatsRemaining = currentSeatsRemaining - seatCount;
+
+    // Update the total number of purchased seats
+    const updatedTotalPurchasedSeats = totalPurchasedSeats + seatCount;
 
     try {
-      // Update the "Number of seats remaining" in the Airtable record
+      // Update both "Number of seats remaining" and "Total Number of Purchased Seats" in the Airtable record
       await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
-        "Number of seats remaining": updatedSeats.toString(), // Convert to string for Airtable
+        "Number of seats remaining": updatedSeatsRemaining.toString(), // Convert to string for Airtable
+        "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(), // Convert to string for Airtable
       });
 
-      console.log(`Seats successfully updated. Remaining seats: ${updatedSeats}`);
+      console.log(`Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`);
     } catch (updateError) {
-      console.error("Error updating the Number of seats:", updateError);
-      return res.status(500).send({ message: "Error updating the number of seats", error: updateError });
+      console.error("Error updating the seats:", updateError);
+      return res.status(500).send({ message: "Error updating the seat information", error: updateError });
     }
 
 
