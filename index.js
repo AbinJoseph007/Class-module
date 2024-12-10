@@ -523,6 +523,7 @@ app.post('/submit-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
+        "Booking Type": "User booked"
       };
 
       seatRecords.push(seatRecord);
