@@ -523,7 +523,6 @@ app.post('/submit-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
-        "Booking Type": "User booked"
       };
 
       seatRecords.push(seatRecord);
@@ -584,7 +583,9 @@ app.post('/submit-class', async (req, res) => {
       "Biaw Classes": [fields['airtable-id']], // Ensure this is a valid Airtable record ID, not just a number
       "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
       "Number of seat Purchased": seatCount, // Add the seat count
-      "Biaw Classes": [biawClassId], // This is now a valid record ID from the Biaw Classes table
+      "Biaw Classes": [biawClassId],
+      // This is now a valid record ID from the Biaw Classes table
+      "Booking Type": "User booked"
     };
 
     // Send data to Payment Records table in Airtable
