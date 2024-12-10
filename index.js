@@ -515,6 +515,21 @@ app.post('/submit-class', async (req, res) => {
         seatCount++;
       }
 
+      const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+      .select({
+        filterByFormula: `{Field ID} = ${airID}`, // Ensure this matches the value you're passing
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (biawClassesTables.length === 0) {
+      console.error("No matching record found in Biaw Classes table");
+      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+    }
+
+    const biawClassRecords = biawClassesTables[0];
+    const biawClassIds = biawClassRecords.id;
+
       // Prepare a record for Airtable (Seats table)
       const seatRecord = {
         "Name": name || "", // Default to empty string if field is missing
@@ -523,6 +538,8 @@ app.post('/submit-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
+        "Biaw Classes": [biawClassIds], // Ensure this is a valid Airtable record ID, not just a number
+
       };
 
       seatRecords.push(seatRecord);
@@ -599,6 +616,163 @@ app.post('/submit-class', async (req, res) => {
       "Biaw Classes": [biawClassId],
       // This is now a valid record ID from the Biaw Classes table
       "Booking Type": "User booked"
+    };
+
+    // Send data to Payment Records table in Airtable
+    let paymentCreatedRecord;
+    try {
+      paymentCreatedRecord = await airtable
+        .base(AIRTABLE_BASE_ID)("Payment Records") // Replace with your actual table name
+        .create(paymentRecord);
+    } catch (paymentError) {
+      console.error("Error adding to Payment Records:", paymentError);
+      return res.status(500).send({ message: "Error registering payment record", error: paymentError });
+    }
+
+    // Successfully created records in both tables
+    res.status(200).send({
+      message: "Class registered successfully",
+      records: createdRecords,
+      paymentRecord: paymentCreatedRecord,
+    });
+  } catch (error) {
+    console.error("Error adding records to Airtable:", error);
+    res.status(500).send({ message: "Error registering class", error: error });
+  }
+});
+
+
+//ROII REGISTRATION
+
+app.post('/register-class', async (req, res) => {
+  const { memberid, timestampField, ...fields } = req.body;
+
+  try {
+    const seatRecords = []; // Array to hold the seat records
+    const seatRecordIds = []; // Array to hold the IDs of the seat records
+    const registeredNames = [];
+    let seatCount = 0; // Counter for the number of seats purchased
+
+    // Loop through the submitted fields dynamically
+    for (let i = 1; i <= 10; i++) { // Assuming max 10 seats
+      const Rname = fields[`Roii-P-${i}-Name`];
+      const Remail = fields[`Roii-P-${i}-Email`] || fields[`P${i}-Email-2`] ;
+      const Rphone = fields[`Roii-P-${i}-Phone-Number`] || fields[`P${i}-Phone-Number-2`];
+      const airID = fields['airtable-id'];
+      
+      // Skip empty seat data
+      if (!Rname && !Remail && !Rphone) {
+        continue;
+      }
+
+      // Increment seat count for non-empty names
+      if (Rname) {
+        seatCount++;
+      }
+
+      const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+      .select({
+        filterByFormula: `{Field ID} = ${airID}`, // Ensure this matches the value you're passing
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (biawClassesTables.length === 0) {
+      console.error("No matching record found in Biaw Classes table");
+      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+    }
+
+    const biawClassRecords = biawClassesTables[0];
+    const biawClassIds = biawClassRecords.id; // This is the valid Airtable record ID
+
+      // Prepare a record for Airtable (Seats table)
+      const seatRecord = {
+        "Name": Rname || "", // Default to empty string if field is missing
+        "Email": Remail || "",
+        "Phone Number": Rphone || "",
+        "Time Stamp": timestampField,
+        "Purchased class Airtable ID": airID,
+        "Biaw Classes": [biawClassIds], // Ensure this is a valid Airtable record ID, not just a number
+      };
+
+      seatRecords.push(seatRecord);
+    }
+
+    // Send each seat record to Airtable (Seats table)
+    const createdRecords = [];
+    for (const record of seatRecords) {
+      const createdRecord = await airtable
+        .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME2)
+        .create(record);
+
+      createdRecords.push(createdRecord);
+      seatRecordIds.push(createdRecord.id); // Save the record ID for linking
+      registeredNames.push(record["Name"]); // Save the name for other use
+    }
+
+    // Query the Biaw Classes table to fetch the correct record ID (Field ID is used for linking)
+    const biawClassesTable = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+      .select({
+        filterByFormula: `{Field ID} = '${fields['airtable-id']}'`, // Ensure this matches the value you're passing
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (biawClassesTable.length === 0) {
+      console.error("No matching record found in Biaw Classes table");
+      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+    }
+
+    const biawClassRecord = biawClassesTable[0];
+    const biawClassId = biawClassRecord.id; // This is the valid Airtable record ID
+
+    // Fetch the current number of remaining seats and total purchased seats
+    let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
+    let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10); // Default to 0 if field is missing
+
+    // Check if there are enough seats available for this purchase
+    if (currentSeatsRemaining < seatCount) {
+      return res.status(400).send({ message: "Not enough seats available for this class." });
+    }
+
+    // Deduct the number of purchased seats from the remaining seats
+    const updatedSeatsRemaining = currentSeatsRemaining - seatCount;
+
+    // Update the total number of purchased seats
+    const updatedTotalPurchasedSeats = totalPurchasedSeats + seatCount;
+
+    try {
+      // Update both "Number of seats remaining" and "Total Number of Purchased Seats" in the Airtable record
+      await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
+        "Number of seats remaining": updatedSeatsRemaining.toString(), // Convert to string for Airtable
+        "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(), // Convert to string for Airtable
+      });
+
+      console.log(`Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`);
+    } catch (updateError) {
+      console.error("Error updating the seats:", updateError);
+      return res.status(500).send({ message: "Error updating the seat information", error: updateError });
+    }
+
+      const signEmail = fields['roii-signedmemberemail'];
+      const signName = fields["roii-signed-member-name"];
+
+    // Prepare data for Payment Records table
+    const paymentRecord = {
+      "Name": signName,
+      "Email": signEmail,
+      "Client ID": memberid,
+      "Airtable id": fields['airtable-id'],
+      "Client name": signName,
+      "Payment Status": "ROII-Free",
+      "Biaw Classes": [fields['airtable-id']], // Ensure this is a valid Airtable record ID, not just a number
+      "Multiple Class Registration": seatRecordIds, // Pass the record IDs for Linked Record field
+      "Number of seat Purchased": seatCount, // Add the seat count
+      "Biaw Classes": [biawClassId],
+      // This is now a valid record ID from the Biaw Classes table
+      "Booking Type": "User booked",
+      "ROII member":"Yes"
+
     };
 
     // Send data to Payment Records table in Airtable
