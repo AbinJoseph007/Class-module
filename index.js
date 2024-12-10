@@ -556,21 +556,29 @@ app.post('/submit-class', async (req, res) => {
     const biawClassRecord = biawClassesTable[0];
     const biawClassId = biawClassRecord.id; // This is the valid Airtable record ID
 
-    // Update the Number of seats in the Biaw Classes table
-    const currentSeats = biawClassRecord.fields["Number of seats"];
-    if (currentSeats < seatCount) {
+    // Fetch the current number of remaining seats
+    let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
+
+    // Check if there are enough seats available for this purchase
+    if (currentSeatsRemaining < seatCount) {
       return res.status(400).send({ message: "Not enough seats available for this class." });
     }
-    const updatedSeats = currentSeats - seatCount;
+
+    // Deduct the number of purchased seats from the remaining seats
+    const updatedSeats = currentSeatsRemaining - seatCount;
 
     try {
+      // Update the "Number of seats remaining" in the Airtable record
       await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
-        "Number of seats remaining": updatedSeats.toString(), // Convert to string for single-line text
+        "Number of seats remaining": updatedSeats.toString(), // Convert to string for Airtable
       });
+
+      console.log(`Seats successfully updated. Remaining seats: ${updatedSeats}`);
     } catch (updateError) {
       console.error("Error updating the Number of seats:", updateError);
       return res.status(500).send({ message: "Error updating the number of seats", error: updateError });
     }
+
 
     // Prepare data for Payment Records table
     const paymentRecord = {
