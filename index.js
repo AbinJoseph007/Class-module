@@ -495,13 +495,11 @@ const webflowHeaders = {
 
 async function syncAirtableToWebflow() {
   try {
-    // Fetch Records from Airtable
     const airtableResponse = await axios.get(airtableBaseURL, { headers: airtableHeaders });
     const records = airtableResponse.data.records;
 
     console.log(`Fetched ${records.length} records from Airtable.`);
 
-    // Fetch existing records from Webflow to check if the data is already present
     let existingWebflowRecords = [];
     try {
       const webflowResponse = await axios.get(webflowBaseURL, { headers: webflowHeaders });
@@ -513,10 +511,8 @@ async function syncAirtableToWebflow() {
     for (const record of records) {
       const { fields } = record;
 
-      // Retrieve the Airtable record ID directly from the record object, not from fields
       const airtableRecordId = record.id;
 
-      // Retrieve details of "Biaw Classes"
       const biawClassesDetails = [];
       if (fields["Biaw Classes"]) {
         for (const classId of fields["Biaw Classes"]) {
@@ -531,35 +527,32 @@ async function syncAirtableToWebflow() {
 
       console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
 
-      // Format data for Webflow
       const webflowData = {
         fieldData: {
-          name: biawClassesDetails[0]?.Name || "", // Adjust to match your Airtable column
+          name: biawClassesDetails[0]?.Name || "", 
           _archived: false,
           _draft: false,
           "field-id": fields["Airtable id"],
           "member-id": fields["Client ID"],
           "mail-id": fields["Email"],
           "total-amount": String(fields["Amount Total"]),
-          "purchase-class-name": biawClassesDetails[0]?.Name || "", // Name of the first class
-          "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "", // End date of the first class
-          "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "", // End time of the first class
-          "purchased-class-start-date": biawClassesDetails[0]?.Date || "", // Start date of the first class
-          "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "", // Start time of the first class
+          "purchase-class-name": biawClassesDetails[0]?.Name || "", 
+          "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "", 
+          "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "", 
+          "purchased-class-start-date": biawClassesDetails[0]?.Date || "", 
+          "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "", 
           "payment-status": fields['Payment Status'],
           "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
           "number-of-purchased-seats": String(fields["Number of seat Purchased"]),
-          "purchase-record-airtable-id": record.id, // Airtable record ID
+          "purchase-record-airtable-id": record.id,
         },
       };
 
-      // Check if the record already exists in Webflow based on "purchase-record-airtable-id"
       const existingRecord = existingWebflowRecords.find(webflowRecord => webflowRecord["purchase-record-airtable-id"] === record.id);
       
       if (existingRecord) {
         console.log(`Record with Airtable ID ${airtableRecordId} already exists in Webflow. Skipping...`);
       } else {
-        // Push Data to Webflow CMS
         try {
           const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
           console.log(`Successfully pushed record to Webflow:`, webflowResponse.data);
