@@ -501,8 +501,20 @@ async function syncAirtableToWebflow() {
 
     console.log(`Fetched ${records.length} records from Airtable.`);
 
+    // Fetch existing records from Webflow to check if the data is already present
+    let existingWebflowRecords = [];
+    try {
+      const webflowResponse = await axios.get(webflowBaseURL, { headers: webflowHeaders });
+      existingWebflowRecords = webflowResponse.data.items || [];
+    } catch (webflowError) {
+      console.error("Error fetching records from Webflow:", webflowError.response?.data || webflowError.message);
+    }
+
     for (const record of records) {
       const { fields } = record;
+
+      // Retrieve the Airtable record ID directly from the record object, not from fields
+      const airtableRecordId = record.id;
 
       // Retrieve details of "Biaw Classes"
       const biawClassesDetails = [];
@@ -534,21 +546,26 @@ async function syncAirtableToWebflow() {
           "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "", // End time of the first class
           "purchased-class-start-date": biawClassesDetails[0]?.Date || "", // Start date of the first class
           "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "", // Start time of the first class
-          "payment-status":fields['Payment Status'],
-           "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
-           "number-of-purchased-seats":String(fields["Number of seat Purchased"]),
-           "purchase-record-airtable-id": record.id, // Airtable record ID
-
+          "payment-status": fields['Payment Status'],
+          "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+          "number-of-purchased-seats": String(fields["Number of seat Purchased"]),
+          "purchase-record-airtable-id": record.id, // Airtable record ID
         },
       };
-      
 
-      // Push Data to Webflow CMS
-      try {
-        const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
-        console.log(`Successfully pushed record to Webflow:`, webflowResponse.data);
-      } catch (webflowError) {
-        console.error(`Error pushing record to Webflow:`, webflowError.response?.data || webflowError.message);
+      // Check if the record already exists in Webflow based on "purchase-record-airtable-id"
+      const existingRecord = existingWebflowRecords.find(webflowRecord => webflowRecord["purchase-record-airtable-id"] === record.id);
+      
+      if (existingRecord) {
+        console.log(`Record with Airtable ID ${airtableRecordId} already exists in Webflow. Skipping...`);
+      } else {
+        // Push Data to Webflow CMS
+        try {
+          const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
+          console.log(`Successfully pushed record to Webflow:`, webflowResponse.data);
+        } catch (webflowError) {
+          console.error(`Error pushing record to Webflow:`, webflowError.response?.data || webflowError.message);
+        }
       }
     }
   } catch (airtableError) {
