@@ -475,214 +475,6 @@ async function processNewClasses() {
   }
 }
 
-
-
-
-
-// Airtable API Configuration
-const airtableBaseURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
-const airtableHeaders = {
-  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-};
-
-// Webflow API Configuration
-const webflowBaseURL = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID2}/items`;
-const webflowHeaders = {
-  Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-  "Content-Type": "application/json",
-  Accept: "application/json",
-};
-
-
-// payed classes 
-async function syncAirtableToWebflow() {
-  try {
-    // Fetch records from Airtable
-    const airtableResponse = await axios.get(airtableBaseURL, { headers: airtableHeaders });
-    const airtableRecords = airtableResponse.data.records;
-
-    console.log(`Fetched ${airtableRecords.length} records from Airtable.`);
-
-    // Fetch existing records from Webflow
-    let existingWebflowRecords = [];
-    try {
-      const webflowResponse = await axios.get(webflowBaseURL, { headers: webflowHeaders });
-      existingWebflowRecords = webflowResponse.data.items || [];
-    } catch (webflowError) {
-      console.error("Error fetching records from Webflow:", webflowError.response?.data || webflowError.message);
-    }
-
-    // Map Webflow records' `purchase-record-airtable-id` into a Set for fast lookup
-    const webflowRecordIds = new Set(
-      existingWebflowRecords.map(record => record.fieldData["purchase-record-airtable-id"])
-    );
-
-    // Process each Airtable record
-    for (const record of airtableRecords) {
-      const airtableRecordId = record.id;
-
-      // Skip record if it already exists in Webflow
-      if (webflowRecordIds.has(airtableRecordId)) {
-        console.log(`Record with Airtable ID ${airtableRecordId} already exists in Webflow. Skipping...`);
-        continue;
-      }
-
-      // Fetch related Biaw Classes details
-      const biawClassesDetails = [];
-      if (record.fields["Biaw Classes"]) {
-        for (const classId of record.fields["Biaw Classes"]) {
-          try {
-            const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
-            biawClassesDetails.push(classResponse.data.fields);
-          } catch (classError) {
-            console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
-          }
-        }
-      }
-
-      console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
-
-      // Prepare data for Webflow
-      const webflowData = {
-        fieldData: {
-          name: biawClassesDetails[0]?.Name || "",
-          _archived: false,
-          _draft: false,
-          "field-id": record.fields["Airtable id"],
-          "member-id": record.fields["Client ID"],
-          "mail-id": record.fields["Email"],
-          "total-amount": String(record.fields["Amount Total"]),
-          "purchase-class-name": biawClassesDetails[0]?.Name || "",
-          "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
-          "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
-          "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
-          "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
-          "payment-status": record.fields["Payment Status"],
-          "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
-          "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
-          "purchase-record-airtable-id": airtableRecordId, 
-        },
-      };
-
-      // Push new record to Webflow
-      try {
-        const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
-        console.log(`Successfully pushed record to Webflow:`, webflowResponse.data);
-      } catch (webflowError) {
-        console.error(`Error pushing record to Webflow:`, webflowError.response?.data || webflowError.message);
-      }
-    }
-  } catch (airtableError) {
-    console.error(`Error fetching data from Airtable:`, airtableError.response?.data || airtableError.message);
-  }
-}
-
-
-
-// Run the Script
-syncAirtableToWebflow();
-
-async function runPeriodically(intervalMs) {
-  console.log("Starting periodic sync...");
-  setInterval(async () => {
-    console.log(`Running sync at ${new Date().toISOString()}`);
-    await syncAirtableToWebflow(); 
-  }, intervalMs);
-}
-
-runPeriodically(30 * 1000);
-
-
-
-const SITE_ID = "670d37b3620fd9656047ce2d"; 
-
-const API_BASE_URL = "https://api.webflow.com/v2";
-
-// publish an cms staged item
-async function publishStagedItems() {
-  try {
-    // Fetch all collections for the site
-    const collectionsResponse = await axios.get(`${API_BASE_URL}/sites/${SITE_ID}/collections`, {
-      headers: {
-        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-        "Accept-Version": "1.0.0",
-      },
-    });
-
-    const collections = collectionsResponse.data.collections || [];
-    if (!collections.length) {
-      console.log("No collections found.");
-      return;
-    }
-
-    console.log(
-      "Available Collections:",
-      collections.map((col) => ({
-        id: col.id,
-        name: col.displayName,
-        slug: col.slug,
-      }))
-    );
-
-    const targetCollection = collections.find(
-      (collection) => collection.displayName === "Purchases"
-    );
-
-    if (!targetCollection) {
-      console.log("Target collection not found. Ensure the collection name matches exactly.");
-      return;
-    }
-
-    const COLLECTION_ID = targetCollection.id;
-    console.log(`Using Collection ID: ${COLLECTION_ID}`);
-
-    const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID}/items`, {
-      headers: {
-        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-        "Accept-Version": "1.0.0",
-      },
-    });
-
-    const items = itemsResponse.data.items || [];
-
-    const stagedItemIds = items
-      .filter((item) => item.lastPublished === null) 
-      .map((item) => item.id);
-
-    if (!stagedItemIds.length) {
-      console.log("No staged items found to publish.");
-      return;
-    }
-
-    console.log(`Found staged items: ${stagedItemIds}`);
-
-    const publishResponse = await axios.post(
-      `${API_BASE_URL}/collections/${COLLECTION_ID}/items/publish`,
-      { itemIds: stagedItemIds },
-      {
-        headers: {
-          Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    console.log("Publish Response:", publishResponse.data);
-  } catch (error) {
-    console.error("Error publishing staged items:", error.response?.data || error.message);
-  }
-}
-
-async function runPeriodicallys(intervalMs) {
-  console.log("Starting periodic sync...");
-  setInterval(async () => {
-    console.log(`Running sync at ${new Date().toISOString()}`);
-    await publishStagedItems(); 
-  }, intervalMs);
-}
-
-runPeriodicallys(60 * 1000);
-
 //class registration form submission
 
 app.post('/submit-class', async (req, res) => {
@@ -974,11 +766,7 @@ app.post('/register-class', async (req, res) => {
   }
 });
 
-
-
-
 // payment updation
-
 const stripes = Stripe(process.env.STRIPE_API_KEY);
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID); // Correct initialization
@@ -1033,7 +821,7 @@ const checkAndPushPayments = async () => {
   }
 };
 
-cron.schedule('*/1 * * * *', async () => {
+cron.schedule('*/20 * * * * *', async () => {
   console.log('Running scheduled job: Checking for new payments...');
   await checkAndPushPayments();
 });
@@ -1050,6 +838,195 @@ app.get('/latest-payment', async (req, res) => {
 });
 
 
+// Airtable API Configuration
+const airtableBaseURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
+const airtableHeaders = {
+  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+};
+
+// Webflow API Configuration
+const webflowBaseURL = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID2}/items`;
+const webflowHeaders = {
+  Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+  "Content-Type": "application/json",
+  Accept: "application/json",
+};
+
+async function syncAirtableToWebflow() {
+  try {
+    const airtableResponse = await axios.get(airtableBaseURL, { headers: airtableHeaders });
+    const airtableRecords = airtableResponse.data.records;
+
+    console.log(`Fetched ${airtableRecords.length} records from Airtable.`);
+
+    let existingWebflowRecords = [];
+    try {
+      const webflowResponse = await axios.get(webflowBaseURL, { headers: webflowHeaders });
+      existingWebflowRecords = webflowResponse.data.items || [];
+    } catch (webflowError) {
+      console.error("Error fetching records from Webflow:", webflowError.response?.data || webflowError.message);
+    }
+
+    const webflowRecordIds = new Set(
+      existingWebflowRecords.map(record => record.fieldData["purchase-record-airtable-id"])
+    );
+
+    for (const record of airtableRecords) {
+      const airtableRecordId = record.id;
+
+      if (webflowRecordIds.has(airtableRecordId)) {
+        console.log(`Record with Airtable ID ${airtableRecordId} already exists in Webflow. Skipping...`);
+        continue;
+      }
+
+      const biawClassesDetails = [];
+      if (record.fields["Biaw Classes"]) {
+        for (const classId of record.fields["Biaw Classes"]) {
+          try {
+            const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
+            biawClassesDetails.push(classResponse.data.fields);
+          } catch (classError) {
+            console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
+          }
+        }
+      }
+
+      console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
+
+      const webflowData = {
+        fieldData: {
+          name: biawClassesDetails[0]?.Name || "",
+          _archived: false,
+          _draft: false,
+          "field-id": record.fields["Airtable id"],
+          "member-id": record.fields["Client ID"],
+          "mail-id": record.fields["Email"],
+          "total-amount": String(record.fields["Amount Total"]),
+          "purchase-class-name": biawClassesDetails[0]?.Name || "",
+          "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
+          "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
+          "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
+          "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
+          "payment-status": record.fields["Payment Status"],
+          "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+          "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
+          "purchase-record-airtable-id": airtableRecordId, 
+        },
+      };
+
+      try {
+        const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
+        console.log(`Successfully pushed record to Webflow:`, webflowResponse.data);
+      } catch (webflowError) {
+        console.error(`Error pushing record to Webflow:`, webflowError.response?.data || webflowError.message);
+      }
+    }
+  } catch (airtableError) {
+    console.error(`Error fetching data from Airtable:`, airtableError.response?.data || airtableError.message);
+  }
+}
+
+syncAirtableToWebflow();
+
+async function runPeriodically(intervalMs) {
+  console.log("Starting periodic sync...");
+  setInterval(async () => {
+    console.log(`Running sync at ${new Date().toISOString()}`);
+    await syncAirtableToWebflow(); 
+  }, intervalMs);
+}
+
+runPeriodically(30 * 1000);
+
+
+
+const SITE_ID = "670d37b3620fd9656047ce2d"; 
+const API_BASE_URL = "https://api.webflow.com/v2";
+
+// publish an cms staged item
+async function publishStagedItems() {
+  try {
+    // Fetch all collections for the site
+    const collectionsResponse = await axios.get(`${API_BASE_URL}/sites/${SITE_ID}/collections`, {
+      headers: {
+        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+        "Accept-Version": "1.0.0",
+      },
+    });
+
+    const collections = collectionsResponse.data.collections || [];
+    if (!collections.length) {
+      console.log("No collections found.");
+      return;
+    }
+
+    console.log(
+      "Available Collections:",
+      collections.map((col) => ({
+        id: col.id,
+        name: col.displayName,
+        slug: col.slug,
+      }))
+    );
+
+    const targetCollection = collections.find(
+      (collection) => collection.displayName === "Purchases"
+    );
+
+    if (!targetCollection) {
+      console.log("Target collection not found. Ensure the collection name matches exactly.");
+      return;
+    }
+
+    const COLLECTION_ID = targetCollection.id;
+    console.log(`Using Collection ID: ${COLLECTION_ID}`);
+
+    const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID}/items`, {
+      headers: {
+        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+        "Accept-Version": "1.0.0",
+      },
+    });
+
+    const items = itemsResponse.data.items || [];
+
+    const stagedItemIds = items
+      .filter((item) => item.lastPublished === null) 
+      .map((item) => item.id);
+
+    if (!stagedItemIds.length) {
+      console.log("No staged items found to publish.");
+      return;
+    }
+
+    console.log(`Found staged items: ${stagedItemIds}`);
+
+    const publishResponse = await axios.post(
+      `${API_BASE_URL}/collections/${COLLECTION_ID}/items/publish`,
+      { itemIds: stagedItemIds },
+      {
+        headers: {
+          Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("Publish Response:", publishResponse.data);
+  } catch (error) {
+    console.error("Error publishing staged items:", error.response?.data || error.message);
+  }
+}
+
+async function runPeriodicallys(intervalMs) {
+  console.log("Starting periodic sync...");
+  setInterval(async () => {
+    console.log(`Running sync at ${new Date().toISOString()}`);
+    await publishStagedItems(); 
+  }, intervalMs);
+}
+
+runPeriodicallys(60 * 1000);
 
 //Main function to process new classes periodically
 async function processNewClassesPeriodically() {
