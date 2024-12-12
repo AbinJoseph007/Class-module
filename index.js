@@ -586,107 +586,102 @@ async function runPeriodically(intervalMs) {
   console.log("Starting periodic sync...");
   setInterval(async () => {
     console.log(`Running sync at ${new Date().toISOString()}`);
-    await syncAirtableToWebflow(); // Call your function
+    await syncAirtableToWebflow(); 
   }, intervalMs);
 }
 
-// Run the periodic task every minute (60,000ms)
 runPeriodically(30 * 1000);
 
 
-// const SITE_ID = "670d37b3620fd9656047ce2d"; // Replace with your dynamic site ID
 
-// // API Base URL
-// const API_BASE_URL = "https://api.webflow.com/v2";
+const SITE_ID = "670d37b3620fd9656047ce2d"; 
 
-// async function fetchAndPublishStagedItems() {
-//   try {
-//     // Step 1: Fetch all collections for the site
-//     const collectionsResponse = await axios.get(`${API_BASE_URL}/sites/${SITE_ID}/collections`, {
-//       headers: {
-//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-//         "Accept-Version": "1.0.0",
-//       },
-//     });
+const API_BASE_URL = "https://api.webflow.com/v2";
 
-//     // Log the full response to inspect its structure
-//     console.log("Collections Response:", collectionsResponse.data);
+// publish an cms staged item
+async function publishStagedItems() {
+  try {
+    // Fetch all collections for the site
+    const collectionsResponse = await axios.get(`${API_BASE_URL}/sites/${SITE_ID}/collections`, {
+      headers: {
+        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+        "Accept-Version": "1.0.0",
+      },
+    });
 
-//     // Check if collections data is available and is an array
-//     const collections = Array.isArray(collectionsResponse.data.items)
-//       ? collectionsResponse.data.items
-//       : [];
+    const collections = collectionsResponse.data.collections || [];
+    if (!collections.length) {
+      console.log("No collections found.");
+      return;
+    }
 
-//     if (!collections.length) {
-//       console.log("No collections found.");
-//       return;
-//     }
+    console.log(
+      "Available Collections:",
+      collections.map((col) => ({
+        id: col.id,
+        name: col.displayName,
+        slug: col.slug,
+      }))
+    );
 
-//     // Step 2: Find the target collection dynamically (in this case, "Purchases")
-//     const targetCollection = collections.find((collection) => collection.name === "Purchases");
+    const targetCollection = collections.find(
+      (collection) => collection.displayName === "Purchases"
+    );
 
-//     if (!targetCollection) {
-//       console.log("Target collection not found.");
-//       return;
-//     }
+    if (!targetCollection) {
+      console.log("Target collection not found. Ensure the collection name matches exactly.");
+      return;
+    }
 
-//     const COLLECTION_ID = targetCollection.id;
-//     console.log(`Using Collection ID: ${COLLECTION_ID}`);
+    const COLLECTION_ID = targetCollection.id;
+    console.log(`Using Collection ID: ${COLLECTION_ID}`);
 
-//     // Step 3: Fetch all items in the collection
-//     const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID}/items`, {
-//       headers: {
-//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-//         "Accept-Version": "1.0.0",
-//       },
-//     });
+    const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID}/items`, {
+      headers: {
+        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+        "Accept-Version": "1.0.0",
+      },
+    });
 
-//     // Log the items response to inspect its structure
-//     console.log("Items Response:", itemsResponse.data);
+    const items = itemsResponse.data.items || [];
 
-//     // Get items list and filter for staged items (e.g., draft or recently updated)
-//     const items = Array.isArray(itemsResponse.data.items)
-//       ? itemsResponse.data.items
-//       : [];
+    const stagedItemIds = items
+      .filter((item) => item.lastPublished === null) 
+      .map((item) => item.id);
 
-//     const stagedItemIds = items
-//       .filter((item) => item.draft || item["updated-on"]) // Example conditions for staged items
-//       .map((item) => item._id);
+    if (!stagedItemIds.length) {
+      console.log("No staged items found to publish.");
+      return;
+    }
 
-//     if (stagedItemIds.length === 0) {
-//       console.log("No staged items found to publish.");
-//       return;
-//     }
+    console.log(`Found staged items: ${stagedItemIds}`);
 
-//     console.log(`Found staged items: ${stagedItemIds}`);
+    const publishResponse = await axios.post(
+      `${API_BASE_URL}/collections/${COLLECTION_ID}/items/publish`,
+      { itemIds: stagedItemIds },
+      {
+        headers: {
+          Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-//     // Step 4: Publish staged items
-//     const publishResponse = await axios.post(
-//       `${API_BASE_URL}/collections/${COLLECTION_ID}/items/publish`,
-//       {
-//         itemIds: stagedItemIds,
-//       },
-//       {
-//         headers: {
-//           Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-//           "Content-Type": "application/json",
-//         },
-//       }
-//     );
+    console.log("Publish Response:", publishResponse.data);
+  } catch (error) {
+    console.error("Error publishing staged items:", error.response?.data || error.message);
+  }
+}
 
-//     console.log("Publish Response:", publishResponse.data);
-//   } catch (error) {
-//     console.error("Error publishing items:", error.response?.data || error.message);
-//   }
-// }
+async function runPeriodicallys(intervalMs) {
+  console.log("Starting periodic sync...");
+  setInterval(async () => {
+    console.log(`Running sync at ${new Date().toISOString()}`);
+    await publishStagedItems(); 
+  }, intervalMs);
+}
 
-
-// // Run the function when the backend starts
-// (async () => {
-//   console.log("Starting the backend deployment process...");
-//   await fetchAndPublishStagedItems();
-//   console.log("Backend deployment completed.");
-// })();
+runPeriodicallys(60 * 1000);
 
 //class registration form submission
 
