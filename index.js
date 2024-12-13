@@ -790,7 +790,6 @@ const checkAndPushPayments = async () => {
       console.log('No new payments found');
       return;
     }
-    console.log('Stripe Charge Data:', latestCharge);
     const paymentId = latestCharge.id;
     const amountTotal = latestCharge.amount / 100;
     const paymentStatus = latestCharge.status;
