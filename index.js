@@ -820,40 +820,24 @@ const checkAndPushPayments = async () => {
       return;
     }
 
-    // Query Airtable for records matching the email
+    // Query Airtable for all records matching the email
     const matchingRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
       .select({
         filterByFormula: `{Email} = '${email}'`,
-        sort: [{ field: "Created", direction: "desc" }], // Ensure the latest record is first
+        sort: [{ field: "Created", direction: "asc" }], // Sort in ascending order to identify the last row
       })
-      .firstPage();
+      .all(); // Fetch all records
 
     if (matchingRecords.length === 0) {
       console.log('No matching email found in Airtable.');
       return;
     }
 
-    // Define restricted statuses
-    const restrictedStatuses = ["ROII-Free", "Refunded", "ROII-Cancelled", "Cancelled Without Refund"];
+    // Target only the last record in the Airtable results
+    const lastRecord = matchingRecords[matchingRecords.length - 1]; // Bottom row
 
-    // Find the last "Pending" record that is not restricted
-    const unpaidRecord = matchingRecords.reverse().find(record => {
-      const paymentStatus = record.fields["Payment Status"];
-      return paymentStatus && !restrictedStatuses.includes(paymentStatus) && paymentStatus === "Pending";
-    });
-
-    if (!unpaidRecord) {
-      console.log('No unpaid records found for this email.');
-      return;
-    }
-
-    // Generate a new unique Payment ID if no existing Payment ID
-    const newPaymentId = generateStripeLikeId();
-
-    // Update the last unpaid record
-    const recordId = unpaidRecord.id;
     const updatedFields = {
-      "Payment ID": newPaymentId,
+      "Payment ID": paymentId,
       "Amount Total": new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
@@ -861,13 +845,14 @@ const checkAndPushPayments = async () => {
       "Payment Status": "Paid", // Update to "Paid"
     };
 
-    console.log(`Updating record with ID ${recordId} in Airtable:`, updatedFields);
-    await airtableBase(AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
-    console.log(`Record with ID ${recordId} successfully updated.`);
+    console.log(`Updating the last record with ID ${lastRecord.id} in Airtable:`, updatedFields);
+    await airtableBase(AIRTABLE_TABLE_NAME3).update(lastRecord.id, updatedFields);
+    console.log(`Last record with ID ${lastRecord.id} successfully updated.`);
   } catch (error) {
     console.error('Error in checkAndPushPayments:', error);
   }
 };
+
 
 
 
