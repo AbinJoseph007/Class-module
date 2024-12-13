@@ -771,8 +771,15 @@ const stripes = Stripe(process.env.STRIPE_API_KEY);
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID); // Correct initialization
 
+const generateStripeLikeId = () => {
+  const prefix = "cs_test_";
+  const randomString = Array.from({ length: 56 }, () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    return chars.charAt(Math.floor(Math.random() * chars.length));
+  }).join("");
+  return `${prefix}${randomString}`;
+};
 
-// Function to check and update payments
 const checkAndPushPayments = async () => {
   try {
     console.log('Checking for new payments...');
@@ -783,7 +790,7 @@ const checkAndPushPayments = async () => {
       console.log('No new payments found');
       return;
     }
-
+    console.log('Stripe Charge Data:', latestCharge);
     const paymentId = latestCharge.id;
     const amountTotal = latestCharge.amount / 100;
     const paymentStatus = latestCharge.status;
@@ -796,30 +803,74 @@ const checkAndPushPayments = async () => {
 
     console.log('Latest Charge:', { paymentId, amountTotal, paymentStatus, email });
 
-    const matchingRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
-      .select({ filterByFormula: `{Email} = '${email}'` })  // Match by email
+    // Ensure the payment is successful before proceeding
+    if (paymentStatus !== 'succeeded') {
+      console.log('Payment not successful. Skipping Airtable update.');
+      return;
+    }
+
+    // Check if the paymentId already exists in Airtable
+    const existingPaymentRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
+      .select({
+        filterByFormula: `{Payment ID} = '${paymentId}'`,
+      })
       .firstPage();
 
-    if (matchingRecords.length > 0) {
-      const recordId = matchingRecords[0].id;
-      const updatedFields = {
-        "Payment ID": paymentId,
-        "Amount Total": new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-        }).format(amountTotal),
-        "Payment Status": paymentStatus === 'succeeded' ? 'Paid' : 'Failed',
-      };
-      console.log('Updating existing record in Airtable:', updatedFields);
-      await airtableBase(AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
-      console.log('Payment record successfully updated in Airtable.');
-    } else {
-      console.log('No matching email found in Airtable.');
+    if (existingPaymentRecords.length > 0) {
+      console.log(`Payment ID ${paymentId} already exists in Airtable. Skipping update.`);
+      return;
     }
+
+    // Query Airtable for records matching the email
+    const matchingRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
+      .select({
+        filterByFormula: `{Email} = '${email}'`,
+        sort: [{ field: "Created", direction: "desc" }],
+      })
+      .firstPage();
+
+    if (matchingRecords.length === 0) {
+      console.log('No matching email found in Airtable.');
+      return;
+    }
+
+    // Define restricted statuses
+    const restrictedStatuses = ["ROII-Free", "Refunded", "ROII-Cancelled", "Cancelled Without Refund"];
+
+    // Find the most recent unpaid record
+    const unpaidRecord = matchingRecords.find(record => {
+      const paymentStatus = record.fields["Payment Status"];
+      return paymentStatus && !restrictedStatuses.includes(paymentStatus) && paymentStatus === "Pending";
+    });
+
+    if (!unpaidRecord) {
+      console.log('No unpaid records found for this email.');
+      return;
+    }
+
+    // Generate a new unique Payment ID if no existing Payment ID
+    const newPaymentId = generateStripeLikeId();
+
+    // Update the most recent unpaid record
+    const recordId = unpaidRecord.id;
+    const updatedFields = {
+      "Payment ID": newPaymentId,
+      "Amount Total": new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(amountTotal),
+      "Payment Status": "Paid", // Update to "Paid"
+    };
+
+    console.log(`Updating record with ID ${recordId} in Airtable:`, updatedFields);
+    await airtableBase(AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
+    console.log(`Record with ID ${recordId} successfully updated.`);
   } catch (error) {
     console.error('Error in checkAndPushPayments:', error);
   }
 };
+
+
 
 cron.schedule('*/20 * * * * *', async () => {
   console.log('Running scheduled job: Checking for new payments...');
