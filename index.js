@@ -993,7 +993,7 @@ runPeriodically(30 * 1000);
 const SITE_ID = "670d37b3620fd9656047ce2d"; 
 const API_BASE_URL = "https://api.webflow.com/v2";
 
-// publish an cms staged item
+// publish an cms staged item of purchases 
 async function publishStagedItems() {
   try {
     // Fetch all collections for the site
@@ -1077,6 +1077,91 @@ async function runPeriodicallys(intervalMs) {
 }
 
 runPeriodicallys(60 * 1000);
+
+//class publish 
+async function publishStagedItems2() {
+  try {
+    // Fetch all collections for the site
+    const collectionsResponse2 = await axios.get(`${API_BASE_URL}/sites/${SITE_ID}/collections`, {
+      headers: {
+        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+        "Accept-Version": "1.0.0",
+      },
+    });
+
+    const collections2 = collectionsResponse2.data.collections || [];
+    if (!collections2.length) {
+      console.log("No collections found.");
+      return;
+    }
+
+    console.log(
+      "Available Collections:",
+      collections2.map((col) => ({
+        id: col.id,
+        name: col.displayName,
+        slug: col.slug,
+      }))
+    );
+
+    const targetCollection2 = collections2.find(
+      (collection) => collection.displayName === "Classes"
+    );
+
+    if (!targetCollection2) {
+      console.log("Target collection not found. Ensure the collection name matches exactly.");
+      return;
+    }
+
+    const COLLECTION_ID2 = targetCollection2.id;
+    console.log(`Using Collection ID: ${COLLECTION_ID2}`);
+
+    const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID2}/items`, {
+      headers: {
+        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+        "Accept-Version": "1.0.0",
+      },
+    });
+
+    const items = itemsResponse.data.items || [];
+
+    const stagedItemIds2 = items
+      .filter((item) => item.lastPublished === null) 
+      .map((item) => item.id);
+
+    if (!stagedItemIds2.length) {
+      console.log("No staged items found to publish.");
+      return;
+    }
+
+    console.log(`Found staged items: ${stagedItemIds2}`);
+
+    const publishResponse = await axios.post(
+      `${API_BASE_URL}/collections/${COLLECTION_ID2}/items/publish`,
+      { itemIds: stagedItemIds2 },
+      {
+        headers: {
+          Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log("Publish Response:", publishResponse.data);
+  } catch (error) {
+    console.error("Error publishing staged items:", error.response?.data || error.message);
+  }
+}
+
+async function runPeriodicallys2(intervalMs) {
+  console.log("Starting periodic sync2...");
+  setInterval(async () => {
+    console.log(`Running sync at ${new Date().toISOString()}`);
+    await publishStagedItems2(); 
+  }, intervalMs);
+}
+
+runPeriodicallys2(60 * 1000);
 
 //Main function to process new classes periodically
 async function processNewClassesPeriodically() {
