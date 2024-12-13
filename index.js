@@ -782,7 +782,9 @@ const generateStripeLikeId = () => {
 
 const checkAndPushPayments = async () => {
   try {
-    console.log('Checking for new payments...');
+    console.log('Checking for the latest payment...');
+    
+    // Fetch the most recent charge from Stripe
     const charges = await stripes.charges.list({ limit: 1 });
     const latestCharge = charges.data[0];
 
@@ -790,17 +792,27 @@ const checkAndPushPayments = async () => {
       console.log('No new payments found');
       return;
     }
+
     const paymentId = latestCharge.id;
     const amountTotal = latestCharge.amount / 100;
     const paymentStatus = latestCharge.status;
     const email = latestCharge.billing_details?.email || null;
+    const paymentTimestamp = latestCharge.created * 1000; // Stripe uses Unix timestamp (seconds), convert to milliseconds
+    const currentTimestamp = Date.now();
+
+    // Log payment details
+    console.log('Latest payment details:', { paymentId, amountTotal, paymentStatus, email, paymentTimestamp });
+
+    // Check if the payment was made more than one minute ago
+    if (currentTimestamp - paymentTimestamp > 60000) {
+      console.log('Payment is older than one minute. Skipping push to Airtable.');
+      return;
+    }
 
     if (!email) {
       console.log('No email found in Stripe payment details');
       return;
     }
-
-    console.log('Latest Charge:', { paymentId, amountTotal, paymentStatus, email });
 
     // Ensure the payment is successful before proceeding
     if (paymentStatus !== 'succeeded') {
@@ -808,23 +820,11 @@ const checkAndPushPayments = async () => {
       return;
     }
 
-    // Check if the paymentId already exists in Airtable
-    const existingPaymentRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
-      .select({
-        filterByFormula: `{Payment ID} = '${paymentId}'`,
-      })
-      .firstPage();
-
-    if (existingPaymentRecords.length > 0) {
-      console.log(`Payment ID ${paymentId} already exists in Airtable. Skipping update.`);
-      return;
-    }
-
     // Query Airtable for records matching the email
     const matchingRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
       .select({
         filterByFormula: `{Email} = '${email}'`,
-        sort: [{ field: "Created", direction: "desc" }],
+        sort: [{ field: "Created", direction: "desc" }], // Ensure the latest record is first
       })
       .firstPage();
 
@@ -836,8 +836,8 @@ const checkAndPushPayments = async () => {
     // Define restricted statuses
     const restrictedStatuses = ["ROII-Free", "Refunded", "ROII-Cancelled", "Cancelled Without Refund"];
 
-    // Find the most recent unpaid record
-    const unpaidRecord = matchingRecords.find(record => {
+    // Find the last "Pending" record that is not restricted
+    const unpaidRecord = matchingRecords.reverse().find(record => {
       const paymentStatus = record.fields["Payment Status"];
       return paymentStatus && !restrictedStatuses.includes(paymentStatus) && paymentStatus === "Pending";
     });
@@ -850,7 +850,7 @@ const checkAndPushPayments = async () => {
     // Generate a new unique Payment ID if no existing Payment ID
     const newPaymentId = generateStripeLikeId();
 
-    // Update the most recent unpaid record
+    // Update the last unpaid record
     const recordId = unpaidRecord.id;
     const updatedFields = {
       "Payment ID": newPaymentId,
@@ -868,6 +868,7 @@ const checkAndPushPayments = async () => {
     console.error('Error in checkAndPushPayments:', error);
   }
 };
+
 
 
 
