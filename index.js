@@ -971,7 +971,7 @@ async function runPeriodically(intervalMs) {
   }, intervalMs);
 }
 
-runPeriodically(30 * 1000);
+runPeriodically(60 * 1000);
 
 
 
