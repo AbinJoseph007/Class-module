@@ -836,8 +836,10 @@ const checkAndPushPayments = async () => {
     // Target only the last record in the Airtable results
     const lastRecord = matchingRecords[matchingRecords.length - 1]; // Bottom row
 
+    const newPaymentId = generateStripeLikeId();
+
     const updatedFields = {
-      "Payment ID": paymentId,
+      "Payment ID": newPaymentId,
       "Amount Total": new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
@@ -852,9 +854,6 @@ const checkAndPushPayments = async () => {
     console.error('Error in checkAndPushPayments:', error);
   }
 };
-
-
-
 
 
 cron.schedule('*/20 * * * * *', async () => {
