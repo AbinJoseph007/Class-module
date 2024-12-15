@@ -804,8 +804,8 @@ const checkAndPushPayments = async () => {
     console.log('Latest payment details:', { paymentId, amountTotal, paymentStatus, email, paymentTimestamp });
 
     // Check if the payment was made more than one minute ago
-    if (currentTimestamp - paymentTimestamp > 60000) {
-      console.log('Payment is older than one minute. Skipping push to Airtable.');
+    if (currentTimestamp - paymentTimestamp > 20000) {
+      console.log('Payment is older than twemty seconds. Skipping push to Airtable.');
       return;
     }
 
@@ -971,7 +971,7 @@ async function runPeriodically(intervalMs) {
   }, intervalMs);
 }
 
-runPeriodically(60 * 1000);
+runPeriodically(90 * 1000);
 
 
 
@@ -1061,7 +1061,7 @@ async function runPeriodicallys(intervalMs) {
   }, intervalMs);
 }
 
-runPeriodicallys(60 * 1000);
+runPeriodicallys(30 * 1000);
 
 //class publish 
 async function publishStagedItems2() {
@@ -1146,7 +1146,7 @@ async function runPeriodicallys2(intervalMs) {
   }, intervalMs);
 }
 
-runPeriodicallys2(60 * 1000);
+runPeriodicallys2(30 * 1000);
 
 //Main function to process new classes periodically
 async function processNewClassesPeriodically() {
