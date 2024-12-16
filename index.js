@@ -1172,6 +1172,32 @@ async function processNewClassesPeriodically() {
 // Start the periodic process
 processNewClassesPeriodically();
 
+app.post("/cancel-payment", async (req, res) => {
+  const { airtableRecordId } = req.body;
+
+  if (!airtableRecordId) {
+    return res.status(400).json({ message: "Missing Airtable Record ID" });
+  }
+
+  try {
+    const airtableURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${airtableRecordId}`;
+
+    // Update Payment Status in Airtable
+    await axios.patch(
+      airtableURL,
+      { fields: { "Payment Status": "Cancelled Without Refund" } },
+      { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
+    );
+
+    console.log(`Updated Airtable record: ${airtableRecordId}`);
+    res.status(200).json({ message: "Payment status updated successfully", recordId: airtableRecordId });
+  } catch (error) {
+    console.error("Error updating Airtable:", error.message);
+    res.status(500).json({ message: "Failed to update Airtable", error: error.message });
+  }
+});
+
+
 
 
 (async () => {
