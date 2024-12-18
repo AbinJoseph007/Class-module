@@ -783,7 +783,7 @@ const generateStripeLikeId = () => {
 const checkAndPushPayments = async () => {
   try {
     console.log('Checking for the latest payment...');
-    
+
     // Fetch the most recent charge from Stripe
     const charges = await stripes.charges.list({ limit: 1 });
     const latestCharge = charges.data[0];
@@ -872,8 +872,6 @@ app.get('/latest-payment', async (req, res) => {
   }
 });
 
-
-// Airtable API Configuration
 const airtableBaseURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
 const airtableHeaders = {
   Authorization: `Bearer ${AIRTABLE_API_KEY}`,
@@ -889,11 +887,13 @@ const webflowHeaders = {
 
 async function syncAirtableToWebflow() {
   try {
+    // Fetch Airtable data
     const airtableResponse = await axios.get(airtableBaseURL, { headers: airtableHeaders });
     const airtableRecords = airtableResponse.data.records;
 
     console.log(`Fetched ${airtableRecords.length} records from Airtable.`);
 
+    // Fetch existing Webflow records
     let existingWebflowRecords = [];
     try {
       const webflowResponse = await axios.get(webflowBaseURL, { headers: webflowHeaders });
@@ -909,51 +909,127 @@ async function syncAirtableToWebflow() {
     for (const record of airtableRecords) {
       const airtableRecordId = record.id;
 
-      if (webflowRecordIds.has(airtableRecordId)) {
-        console.log(`Record with Airtable ID ${airtableRecordId} already exists in Webflow. Skipping...`);
+      // Skip records with "Payment Status" as "Pending"
+      if (record.fields["Payment Status"] === "Pending") {
+        console.log(`Skipping record with Airtable ID ${airtableRecordId} due to Pending Payment Status.`);
         continue;
       }
 
-      const biawClassesDetails = [];
-      if (record.fields["Biaw Classes"]) {
-        for (const classId of record.fields["Biaw Classes"]) {
-          try {
-            const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
-            biawClassesDetails.push(classResponse.data.fields);
-          } catch (classError) {
-            console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
+      // Check if the record already exists in Webflow
+      if (webflowRecordIds.has(airtableRecordId)) {
+        const webflowRecord = existingWebflowRecords.find(r => r.fieldData["purchase-record-airtable-id"] === airtableRecordId);
+
+        const biawClassesDetails = [];
+        if (record.fields["Biaw Classes"]) {
+          for (const classId of record.fields["Biaw Classes"]) {
+            try {
+              const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
+              biawClassesDetails.push(classResponse.data.fields);
+            } catch (classError) {
+              console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
+            }
           }
         }
-      }
 
-      console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
+        console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
 
-      const webflowData = {
-        fieldData: {
-          name: biawClassesDetails[0]?.Name || "",
-          _archived: false,
-          _draft: false,
-          "field-id": record.fields["Airtable id"],
-          "member-id": record.fields["Client ID"],
-          "mail-id": record.fields["Email"],
-          "total-amount": String(record.fields["Amount Total"]),
-          "purchase-class-name": biawClassesDetails[0]?.Name || "",
-          "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
-          "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
-          "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
-          "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
-          "payment-status": record.fields["Payment Status"],
-          "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
-          "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
-          "purchase-record-airtable-id": airtableRecordId, 
-        },
-      };
+        // Prepare the new data to be sent to Webflow
+        const webflowData = {
+          fieldData: {
+            name: biawClassesDetails[0]?.Name || "",
+            _archived: false,
+            _draft: false,
+            "field-id": record.fields["Airtable id"],
+            "member-id": record.fields["Client ID"],
+            "mail-id": record.fields["Email"],
+            "total-amount": String(record.fields["Amount Total"]),
+            "purchase-class-name": biawClassesDetails[0]?.Name || "",
+            "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
+            "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
+            "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
+            "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
+            "payment-status": record.fields["Payment Status"],
+            "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+            "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
+            "purchase-record-airtable-id": airtableRecordId,
+          },
+        };
 
-      try {
-        const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
-        console.log(`Successfully pushed record to Webflow:`, webflowResponse.data);
-      } catch (webflowError) {
-        console.error(`Error pushing record to Webflow:`, webflowError.response?.data || webflowError.message);
+        // Compare fields one by one to track changes
+        const fieldsToUpdate = {};
+        let needsUpdate = false;
+
+        for (const field in webflowData.fieldData) {
+          const webflowFieldValue = String(webflowRecord.fieldData[field] || '').trim(); // Ensure values are strings and trimmed
+          const airtableFieldValue = String(webflowData.fieldData[field] || '').trim(); // Ensure values are strings and trimmed
+
+          if (webflowFieldValue !== airtableFieldValue) {
+            needsUpdate = true;
+            fieldsToUpdate[field] = webflowData.fieldData[field];
+          }
+        }
+
+        // Only send an update if there are changed fields
+        if (needsUpdate) {
+          console.log(`Record with Airtable ID ${airtableRecordId} has changes. Updating the following fields: ${Object.keys(fieldsToUpdate).join(', ')}`);
+
+          // Prepare the update data with only changed fields
+          const updateData = { fieldData: fieldsToUpdate };
+
+          try {
+            const updateURL = `${webflowBaseURL}/${webflowRecord.id}`;
+            const webflowUpdateResponse = await axios.patch(updateURL, updateData, { headers: webflowHeaders });
+            console.log(`Successfully updated record in Webflow:`, webflowUpdateResponse.data);
+          } catch (webflowError) {
+            console.error(`Error updating record in Webflow:`, webflowError.response?.data || webflowError.message);
+          }
+        } else {
+          console.log(`Record with Airtable ID ${airtableRecordId} is up to date in Webflow. No update needed.`);
+        }
+      } else {
+        // If record doesn't exist in Webflow, create a new one
+        const biawClassesDetails = [];
+        if (record.fields["Biaw Classes"]) {
+          for (const classId of record.fields["Biaw Classes"]) {
+            try {
+              const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
+              biawClassesDetails.push(classResponse.data.fields);
+            } catch (classError) {
+              console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
+            }
+          }
+        }
+
+        console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
+
+        const webflowData = {
+          fieldData: {
+            name: biawClassesDetails[0]?.Name || "",
+            _archived: false,
+            _draft: false,
+            "field-id": record.fields["Airtable id"],
+            "member-id": record.fields["Client ID"],
+            "mail-id": record.fields["Email"],
+            "total-amount": String(record.fields["Amount Total"]),
+            "purchase-class-name": biawClassesDetails[0]?.Name || "",
+            "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
+            "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
+            "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
+            "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
+            "payment-status": record.fields["Payment Status"],
+            "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+            "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
+            "purchase-record-airtable-id": airtableRecordId,
+          },
+        };
+
+        // Create a new record in Webflow
+        try {
+          const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
+          console.log(`Successfully pushed new record to Webflow:`, webflowResponse.data);
+        } catch (webflowError) {
+          console.error(`Error pushing new record to Webflow:`, webflowError.response?.data || webflowError.message);
+        }
       }
     }
   } catch (airtableError) {
@@ -963,22 +1039,23 @@ async function syncAirtableToWebflow() {
 
 syncAirtableToWebflow();
 
+
 async function runPeriodically(intervalMs) {
   console.log("Starting periodic sync...");
   setInterval(async () => {
     console.log(`Running sync at ${new Date().toISOString()}`);
-    await syncAirtableToWebflow(); 
+    await syncAirtableToWebflow();
   }, intervalMs);
 }
 
-runPeriodically(100 * 1000);
+runPeriodically(30 * 1000);
 
 
 
-const SITE_ID = "670d37b3620fd9656047ce2d"; 
+const SITE_ID = "670d37b3620fd9656047ce2d";
 const API_BASE_URL = "https://api.webflow.com/v2";
 
-// publish an cms staged item of purchases 
+// Publish staged items of purchases
 async function publishStagedItems() {
   try {
     // Fetch all collections for the site
@@ -1016,6 +1093,7 @@ async function publishStagedItems() {
     const COLLECTION_ID = targetCollection.id;
     console.log(`Using Collection ID: ${COLLECTION_ID}`);
 
+    // Fetch items in the collection
     const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID}/items`, {
       headers: {
         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
@@ -1025,17 +1103,22 @@ async function publishStagedItems() {
 
     const items = itemsResponse.data.items || [];
 
+    // Filter out items where 'lastPublished' is null or if they have been updated since last publication
     const stagedItemIds = items
-      .filter((item) => item.lastPublished === null) 
+      .filter((item) => {
+        // If the item has not been published yet or has been updated since its last publish
+        return item.lastPublished === null || new Date(item.lastUpdated) > new Date(item.lastPublished);
+      })
       .map((item) => item.id);
 
     if (!stagedItemIds.length) {
-      console.log("No staged items found to publish.");
+      console.log("No items to publish.");
       return;
     }
 
-    console.log(`Found staged items: ${stagedItemIds}`);
+    console.log(`Items ready for publishing: ${stagedItemIds}`);
 
+    // Publish the items
     const publishResponse = await axios.post(
       `${API_BASE_URL}/collections/${COLLECTION_ID}/items/publish`,
       { itemIds: stagedItemIds },
@@ -1053,11 +1136,14 @@ async function publishStagedItems() {
   }
 }
 
+publishStagedItems();
+
+
 async function runPeriodicallys(intervalMs) {
   console.log("Starting periodic sync...");
   setInterval(async () => {
     console.log(`Running sync at ${new Date().toISOString()}`);
-    await publishStagedItems(); 
+    await publishStagedItems();
   }, intervalMs);
 }
 
@@ -1111,7 +1197,7 @@ async function publishStagedItems2() {
     const items = itemsResponse.data.items || [];
 
     const stagedItemIds2 = items
-      .filter((item) => item.lastPublished === null) 
+      .filter((item) => item.lastPublished === null)
       .map((item) => item.id);
 
     if (!stagedItemIds2.length) {
@@ -1137,12 +1223,13 @@ async function publishStagedItems2() {
     console.error("Error publishing staged items:", error.response?.data || error.message);
   }
 }
+publishStagedItems2();
 
 async function runPeriodicallys2(intervalMs) {
   console.log("Starting periodic sync2...");
   setInterval(async () => {
     console.log(`Running sync at ${new Date().toISOString()}`);
-    await publishStagedItems2(); 
+    await publishStagedItems2();
   }, intervalMs);
 }
 
@@ -1172,6 +1259,7 @@ async function processNewClassesPeriodically() {
 // Start the periodic process
 processNewClassesPeriodically();
 
+
 app.post("/cancel-payment", async (req, res) => {
   const { airtableRecordId } = req.body;
 
@@ -1180,23 +1268,74 @@ app.post("/cancel-payment", async (req, res) => {
   }
 
   try {
+    // Fetch the payment record from Airtable
     const airtableURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${airtableRecordId}`;
+    const recordResponse = await axios.get(airtableURL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+    });
 
-    // Update Payment Status in Airtable
+    const currentPaymentStatus = recordResponse.data.fields["Payment Status"];
+    const seatCount = recordResponse.data.fields["Number of seat Purchased"];
+    const classID = recordResponse.data.fields["Biaw Classes"][0]; // Assuming this is an array of class IDs
+
+    // Determine the new payment status based on the current "Payment Status"
+    let newPaymentStatus = "Cancelled Without Refund"; // Default status
+    if (currentPaymentStatus === "ROII-Free") {
+      newPaymentStatus = "ROII-Cancelled";
+    }
+
+    // Prepare the update payload for payment status
+    const fieldsToUpdate = {
+      "Payment Status": newPaymentStatus,
+    };
+
+    // If the status is updated to "ROII-Cancelled", also update the "Number of seat Purchased" to 0
+    if (newPaymentStatus === "ROII-Cancelled") {
+      fieldsToUpdate["Number of seat Purchased"] = 0; // Set the number of seats to 0
+    }
+
+    // Update the payment status in Airtable
     await axios.patch(
       airtableURL,
-      { fields: { "Payment Status": "Cancelled Without Refund" } },
+      { fields: fieldsToUpdate },
       { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
     );
 
-    console.log(`Updated Airtable record: ${airtableRecordId}`);
-    res.status(200).json({ message: "Payment status updated successfully", recordId: airtableRecordId });
+    // Now, update the "Biaw Classes" table with the updated seat counts
+    const biawClassesURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Biaw Classes/${classID}`;
+    const biawClassResponse = await axios.get(biawClassesURL, {
+      headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+    });
+
+    const currentSeatsRemaining = parseInt(biawClassResponse.data.fields["Number of seats remaining"], 10);
+    const totalPurchasedSeats = parseInt(biawClassResponse.data.fields["Total Number of Purchased Seats"] || "0", 10);
+
+    // Update the "Number of seats remaining" and "Total Number of Purchased Seats"
+    const updatedSeatsRemaining = currentSeatsRemaining + seatCount;
+    const updatedTotalPurchasedSeats = totalPurchasedSeats - seatCount;
+
+    // Now, update the "Biaw Classes" table
+    await axios.patch(
+      biawClassesURL,
+      {
+        fields: {
+          "Number of seats remaining": updatedSeatsRemaining.toString(),
+          "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(),
+        },
+      },
+      { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
+    );
+
+    console.log(`Updated payment status and seats for class ${classID}`);
+    res.status(200).json({
+      message: "Payment status updated and class seat information adjusted",
+      recordId: airtableRecordId,
+    });
   } catch (error) {
     console.error("Error updating Airtable:", error.message);
     res.status(500).json({ message: "Failed to update Airtable", error: error.message });
   }
 });
-
 
 
 
