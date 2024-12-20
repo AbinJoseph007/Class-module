@@ -796,12 +796,13 @@ const checkAndPushPayments = async () => {
     const paymentId = latestCharge.id;
     const amountTotal = latestCharge.amount / 100;
     const paymentStatus = latestCharge.status;
+    const paymentIntentId = latestCharge.payment_intent; // Unique ID from Stripe
     const email = latestCharge.billing_details?.email || null;
     const paymentTimestamp = latestCharge.created * 1000; // Stripe uses Unix timestamp (seconds), convert to milliseconds
     const currentTimestamp = Date.now();
 
     // Log payment details
-    console.log('Latest payment details:', { paymentId, amountTotal, paymentStatus, email, paymentTimestamp });
+    console.log('Latest payment details:', { paymentId,paymentIntentId, amountTotal, paymentStatus, email, paymentTimestamp });
 
     // Check if the payment was made more than one minute ago
     if (currentTimestamp - paymentTimestamp > 20000) {
@@ -839,7 +840,7 @@ const checkAndPushPayments = async () => {
     const newPaymentId = generateStripeLikeId();
 
     const updatedFields = {
-      "Payment ID": newPaymentId,
+      "Payment ID": paymentId,
       "Amount Total": new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
@@ -952,6 +953,7 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
+            "payment-intent-2":biawClassesDetails['Payment ID']
           },
         };
 
@@ -1020,6 +1022,7 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
+            "payment-intent-2":biawClassesDetails['Payment ID']
           },
         };
 
