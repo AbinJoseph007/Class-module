@@ -840,7 +840,7 @@ const checkAndPushPayments = async () => {
     const newPaymentId = generateStripeLikeId();
 
     const updatedFields = {
-      "Payment ID": paymentId,
+      "Payment ID": paymentIntentId,
       "Amount Total": new Intl.NumberFormat('en-US', {
         style: 'currency',
         currency: 'USD',
