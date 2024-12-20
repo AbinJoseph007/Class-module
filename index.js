@@ -953,7 +953,7 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2":biawClassesDetails['Payment ID']
+            "payment-intent-2":biawClassesDetails["Payment ID"]
           },
         };
 
@@ -1022,7 +1022,7 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2":biawClassesDetails['Payment ID']
+            "payment-intent-2":biawClassesDetails["Payment ID"]
           },
         };
 
