@@ -802,7 +802,7 @@ const checkAndPushPayments = async () => {
     const currentTimestamp = Date.now();
 
     // Log payment details
-    console.log('Latest payment details:', { paymentId,paymentIntentId, amountTotal, paymentStatus, email, paymentTimestamp });
+    console.log('Latest payment details:', { paymentId, paymentIntentId, amountTotal, paymentStatus, email, paymentTimestamp });
 
     // Check if the payment was made more than one minute ago
     if (currentTimestamp - paymentTimestamp > 20000) {
@@ -953,7 +953,7 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2":biawClassesDetails["Payment ID"]
+            "payment-intent-2": record.fields["Payment ID"]
           },
         };
 
@@ -1022,7 +1022,7 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2":biawClassesDetails["Payment ID"]
+            "payment-intent-2": record.fields["Payment ID"]
           },
         };
 
