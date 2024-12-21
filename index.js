@@ -1269,8 +1269,8 @@ const stripe3 = require('stripe')('sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZp
 app.post('/cancel-payment', async (req, res) => {
   const { airtableRecordId, paymentIntentId } = req.body;
 
-  if (!airtableRecordId || !paymentIntentId) {
-    return res.status(400).json({ message: "Missing Airtable Record ID or Payment Intent ID" });
+  if (!airtableRecordId) {
+    return res.status(400).json({ message: "Missing Airtable Record ID" });
   }
 
   try {
@@ -1287,17 +1287,17 @@ app.post('/cancel-payment', async (req, res) => {
     // Determine the new payment status
     let newPaymentStatus = "Refunded";  // Default status
     if (currentPaymentStatus === "ROII-Free") {
-      newPaymentStatus = "ROII-Cancelled";
+      newPaymentStatus = "ROII-Cancelled"; // For ROII-Free, we can change status without payment intent
     }
 
     // Prepare the update payload for payment status
     const fieldsToUpdate = {
       "Payment Status": newPaymentStatus,
-      "Refund Confirmation":"Confirmed"
+      "Refund Confirmation": "Confirmed",
     };
 
-    // If the status is updated to "ROII-Cancelled", update seat purchased to 0
-    if (newPaymentStatus === "ROII-Cancelled") {
+    // If the status is updated to "ROII-Cancelled" or "Refunded", update seat purchased to 0
+    if (newPaymentStatus === "ROII-Cancelled" || newPaymentStatus === "Refunded") {
       fieldsToUpdate["Number of seat Purchased"] = 0;  // Set the number of seats to 0
     }
 
@@ -1334,17 +1334,21 @@ app.post('/cancel-payment', async (req, res) => {
 
     console.log(`Updated payment status and seats for class ${classID}`);
 
-    // Proceed with Stripe Refund
-    const refund = await stripe3.refunds.create({
-      payment_intent: paymentIntentId,
-    });
+    // Proceed with Stripe Refund only if paymentIntentId is provided
+    let refundId = null;
+    if (paymentIntentId) {
+      const refund = await stripe3.refunds.create({
+        payment_intent: paymentIntentId,
+      });
 
-    console.log("Refund successful:", refund);
+      console.log("Refund successful:", refund);
+      refundId = refund.id;
+    }
 
     res.status(200).json({
       message: "Payment status updated, class seat adjusted, and refund processed.",
       recordId: airtableRecordId,
-      refundId: refund.id
+      refundId: refundId || "No refund needed",
     });
 
   } catch (error) {
