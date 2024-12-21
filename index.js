@@ -1263,16 +1263,19 @@ async function processNewClassesPeriodically() {
 processNewClassesPeriodically();
 
 
-app.post("/cancel-payment", async (req, res) => {
-  const { airtableRecordId } = req.body;
+const stripe3 = require('stripe')('sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8');  // Stripe Secret Key
 
-  if (!airtableRecordId) {
-    return res.status(400).json({ message: "Missing Airtable Record ID" });
+// POST endpoint to cancel payment and refund
+app.post('/cancel-payment', async (req, res) => {
+  const { airtableRecordId, paymentIntentId } = req.body;
+
+  if (!airtableRecordId || !paymentIntentId) {
+    return res.status(400).json({ message: "Missing Airtable Record ID or Payment Intent ID" });
   }
 
   try {
     // Fetch the payment record from Airtable
-    const airtableURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${airtableRecordId}`;
+    const airtableURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}/${airtableRecordId}`;
     const recordResponse = await axios.get(airtableURL, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
     });
@@ -1281,8 +1284,8 @@ app.post("/cancel-payment", async (req, res) => {
     const seatCount = recordResponse.data.fields["Number of seat Purchased"];
     const classID = recordResponse.data.fields["Biaw Classes"][0]; // Assuming this is an array of class IDs
 
-    // Determine the new payment status based on the current "Payment Status"
-    let newPaymentStatus = "Cancelled Without Refund"; // Default status
+    // Determine the new payment status
+    let newPaymentStatus = "Refunded";  // Default status
     if (currentPaymentStatus === "ROII-Free") {
       newPaymentStatus = "ROII-Cancelled";
     }
@@ -1290,21 +1293,22 @@ app.post("/cancel-payment", async (req, res) => {
     // Prepare the update payload for payment status
     const fieldsToUpdate = {
       "Payment Status": newPaymentStatus,
+      "Refund Confirmation":"Confirmed"
     };
 
-    // If the status is updated to "ROII-Cancelled", also update the "Number of seat Purchased" to 0
+    // If the status is updated to "ROII-Cancelled", update seat purchased to 0
     if (newPaymentStatus === "ROII-Cancelled") {
-      fieldsToUpdate["Number of seat Purchased"] = 0; // Set the number of seats to 0
+      fieldsToUpdate["Number of seat Purchased"] = 0;  // Set the number of seats to 0
     }
 
-    // Update the payment status in Airtable
+    // Update payment status in Airtable
     await axios.patch(
       airtableURL,
       { fields: fieldsToUpdate },
       { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
     );
 
-    // Now, update the "Biaw Classes" table with the updated seat counts
+    // Update the "Biaw Classes" table with seat adjustments
     const biawClassesURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Biaw Classes/${classID}`;
     const biawClassResponse = await axios.get(biawClassesURL, {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
@@ -1313,11 +1317,10 @@ app.post("/cancel-payment", async (req, res) => {
     const currentSeatsRemaining = parseInt(biawClassResponse.data.fields["Number of seats remaining"], 10);
     const totalPurchasedSeats = parseInt(biawClassResponse.data.fields["Total Number of Purchased Seats"] || "0", 10);
 
-    // Update the "Number of seats remaining" and "Total Number of Purchased Seats"
+    // Update seats remaining and total purchased seats
     const updatedSeatsRemaining = currentSeatsRemaining + seatCount;
     const updatedTotalPurchasedSeats = totalPurchasedSeats - seatCount;
 
-    // Now, update the "Biaw Classes" table
     await axios.patch(
       biawClassesURL,
       {
@@ -1330,16 +1333,25 @@ app.post("/cancel-payment", async (req, res) => {
     );
 
     console.log(`Updated payment status and seats for class ${classID}`);
-    res.status(200).json({
-      message: "Payment status updated and class seat information adjusted",
-      recordId: airtableRecordId,
+
+    // Proceed with Stripe Refund
+    const refund = await stripe3.refunds.create({
+      payment_intent: paymentIntentId,
     });
+
+    console.log("Refund successful:", refund);
+
+    res.status(200).json({
+      message: "Payment status updated, class seat adjusted, and refund processed.",
+      recordId: airtableRecordId,
+      refundId: refund.id
+    });
+
   } catch (error) {
-    console.error("Error updating Airtable:", error.message);
-    res.status(500).json({ message: "Failed to update Airtable", error: error.message });
+    console.error("Error processing the payment cancellation and refund:", error.message);
+    res.status(500).json({ message: "Failed to process refund and update records", error: error.message });
   }
 });
-
 
 
 (async () => {
