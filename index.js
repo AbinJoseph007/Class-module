@@ -912,7 +912,7 @@ async function syncAirtableToWebflow() {
             "field-id": record.fields["Airtable id"],
             "member-id": record.fields["Client ID"],
             "mail-id": record.fields["Email"],
-            "total-amount": String(record.fields["Amount Total"]),
+            "total-amount": String(record.fields["Amount Total"]) || "FREE",
             "purchase-class-name": biawClassesDetails[0]?.Name || "",
             "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
             "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
