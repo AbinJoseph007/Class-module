@@ -476,7 +476,6 @@ async function processNewClasses() {
 }
 
 //class registration form submission
-
 app.post('/submit-class', async (req, res) => {
   const { SignedMemberName, signedmemberemail, timestampField, ...fields } = req.body;
 
@@ -485,7 +484,6 @@ app.post('/submit-class', async (req, res) => {
     const seatRecordIds = [];
     const registeredNames = [];
     let seatCount = 0;
-
 
     for (let i = 1; i <= 10; i++) {
       const name = fields[`P${i}-Name`];
@@ -503,7 +501,7 @@ app.post('/submit-class', async (req, res) => {
 
       const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
         .select({
-          filterByFormula: `{Field ID} = ${airID}`,
+          filterByFormula: `{Field ID} = '${airID}'`,
           maxRecords: 1,
         })
         .firstPage();
@@ -524,7 +522,6 @@ app.post('/submit-class', async (req, res) => {
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
         "Biaw Classes": [biawClassIds],
-
       };
 
       seatRecords.push(seatRecord);
@@ -556,35 +553,6 @@ app.post('/submit-class', async (req, res) => {
     const biawClassRecord = biawClassesTable[0];
     const biawClassId = biawClassRecord.id;
 
-
-    let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
-    let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10);
-
-
-    if (currentSeatsRemaining < seatCount) {
-      return res.status(400).send({ message: "Not enough seats available for this class." });
-    }
-
-
-    const updatedSeatsRemaining = currentSeatsRemaining - seatCount;
-
-
-    const updatedTotalPurchasedSeats = totalPurchasedSeats + seatCount;
-
-    try {
-
-      await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
-        "Number of seats remaining": updatedSeatsRemaining.toString(),
-        "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(),
-      });
-
-      console.log(`Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`);
-    } catch (updateError) {
-      console.error("Error updating the seats:", updateError);
-      return res.status(500).send({ message: "Error updating the seat information", error: updateError });
-    }
-
-
     const paymentRecord = {
       "Name": SignedMemberName,
       "Email": signedmemberemail,
@@ -600,7 +568,6 @@ app.post('/submit-class', async (req, res) => {
       "ROII member": "No"
     };
 
-
     let paymentCreatedRecord;
     try {
       paymentCreatedRecord = await airtable
@@ -610,7 +577,6 @@ app.post('/submit-class', async (req, res) => {
       console.error("Error adding to Payment Records:", paymentError);
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
     }
-
 
     res.status(200).send({
       message: "Class registered successfully",
