@@ -565,7 +565,8 @@ app.post('/submit-class', async (req, res) => {
       "Number of seat Purchased": seatCount,
       "Biaw Classes": [biawClassId],
       "Booking Type": "User booked",
-      "ROII member": "No"
+      "ROII member": "No",
+      "Purchased Class url":fields['class-url']
     };
 
     let paymentCreatedRecord;
@@ -708,7 +709,9 @@ app.post('/register-class', async (req, res) => {
       "Number of seat Purchased": seatCount,
       "Biaw Classes": [biawClassId],
       "Booking Type": "User booked",
-      "ROII member": "Yes"
+      "ROII member": "Yes",
+      "Purchased Class url":fields["class-url-2"]
+      
 
     };
     let paymentCreatedRecord;
@@ -919,7 +922,8 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2": record.fields["Payment ID"]
+            "payment-intent-2": record.fields["Payment ID"],
+            "class-url": record.fields["Purchased Class url"] || ""
           },
         };
 
@@ -988,7 +992,8 @@ async function syncAirtableToWebflow() {
             "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2": record.fields["Payment ID"]
+            "payment-intent-2": record.fields["Payment ID"],
+            "class-url": record.fields["Purchased Class url"] || ""
           },
         };
 
