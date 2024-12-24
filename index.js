@@ -566,7 +566,7 @@ app.post('/submit-class', async (req, res) => {
       "Biaw Classes": [biawClassId],
       "Booking Type": "User booked",
       "ROII member": "No",
-      "Purchased Class url":fields['class-url']
+      "Purchased Class url": fields['class-url']
     };
 
     let paymentCreatedRecord;
@@ -710,8 +710,8 @@ app.post('/register-class', async (req, res) => {
       "Biaw Classes": [biawClassId],
       "Booking Type": "User booked",
       "ROII member": "Yes",
-      "Purchased Class url":fields["class-url-2"]
-      
+      "Purchased Class url": fields["class-url-2"]
+
 
     };
     let paymentCreatedRecord;
@@ -912,7 +912,9 @@ async function syncAirtableToWebflow() {
             "field-id": record.fields["Airtable id"],
             "member-id": record.fields["Client ID"],
             "mail-id": record.fields["Email"],
-            "total-amount": String(record.fields["Amount Total"]) ? record.fields["Amount Total"] : "Free",
+            "total-amount": record.fields["Amount Total"] && record.fields["Amount Total"].includes("$")
+              ? record.fields["Amount Total"]
+              : "Free",
             "purchase-class-name": biawClassesDetails[0]?.Name || "",
             "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
             "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
@@ -982,7 +984,9 @@ async function syncAirtableToWebflow() {
             "field-id": record.fields["Airtable id"],
             "member-id": record.fields["Client ID"],
             "mail-id": record.fields["Email"],
-            "total-amount": String(record.fields["Amount Total"]) ? record.fields["Amount Total"] : "Free",
+            "total-amount": record.fields["Amount Total"] && record.fields["Amount Total"].includes("$")
+              ? record.fields["Amount Total"]
+              : "Free",
             "purchase-class-name": biawClassesDetails[0]?.Name || "",
             "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
             "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
