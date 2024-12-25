@@ -921,7 +921,7 @@ async function syncAirtableToWebflow() {
             "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
             "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
             "payment-status": record.fields["Payment Status"],
-            "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", // Set banner image
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
             "payment-intent-2": record.fields["Payment ID"],
@@ -929,11 +929,14 @@ async function syncAirtableToWebflow() {
           },
         };
 
-        // Compare fields one by one to track changes
+        // Compare fields one by one to track changes, excluding banner-image
         const fieldsToUpdate = {};
         let needsUpdate = false;
 
         for (const field in webflowData.fieldData) {
+          // Skip the banner-image field from the comparison
+          if (field === "banner-image") continue;
+
           const webflowFieldValue = String(webflowRecord.fieldData[field] || '').trim(); // Ensure values are strings and trimmed
           const airtableFieldValue = String(webflowData.fieldData[field] || '').trim(); // Ensure values are strings and trimmed
 
@@ -993,7 +996,7 @@ async function syncAirtableToWebflow() {
             "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
             "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
             "payment-status": record.fields["Payment Status"],
-            "image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", // Set banner image
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
             "payment-intent-2": record.fields["Payment ID"],
@@ -1014,6 +1017,7 @@ async function syncAirtableToWebflow() {
     console.error(`Error fetching data from Airtable:`, airtableError.response?.data || airtableError.message);
   }
 }
+
 
 syncAirtableToWebflow();
 
