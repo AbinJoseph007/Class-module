@@ -766,21 +766,15 @@ const checkAndPushPayments = async () => {
     const amountTotal = latestCharge.amount / 100;
     const paymentStatus = latestCharge.status;
     const paymentIntentId = latestCharge.payment_intent; // Unique ID from Stripe
-    const email = latestCharge.billing_details?.email || null;
     const paymentTimestamp = latestCharge.created * 1000; // Stripe uses Unix timestamp (seconds), convert to milliseconds
     const currentTimestamp = Date.now();
 
     // Log payment details
-    console.log('Latest payment details:', { paymentId, paymentIntentId, amountTotal, paymentStatus, email, paymentTimestamp });
+    console.log('Latest payment details:', { paymentId, paymentIntentId, amountTotal, paymentStatus, paymentTimestamp });
 
     // Check if the payment was made more than one minute ago
     if (currentTimestamp - paymentTimestamp > 20000) {
-      console.log('Payment is older than twemty seconds. Skipping push to Airtable.');
-      return;
-    }
-
-    if (!email) {
-      console.log('No email found in Stripe payment details');
+      console.log('Payment is older than twenty seconds. Skipping push to Airtable.');
       return;
     }
 
@@ -790,21 +784,20 @@ const checkAndPushPayments = async () => {
       return;
     }
 
-    // Query Airtable for all records matching the email
-    const matchingRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
+    // Fetch all records from Airtable (You can adjust this logic based on your requirements)
+    const allRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
       .select({
-        filterByFormula: `{Email} = '${email}'`,
         sort: [{ field: "Created", direction: "asc" }], // Sort in ascending order to identify the last row
       })
       .all(); // Fetch all records
 
-    if (matchingRecords.length === 0) {
-      console.log('No matching email found in Airtable.');
+    if (allRecords.length === 0) {
+      console.log('No records found in Airtable.');
       return;
     }
 
     // Target only the last record in the Airtable results
-    const lastRecord = matchingRecords[matchingRecords.length - 1]; // Bottom row
+    const lastRecord = allRecords[allRecords.length - 1]; // Bottom row
 
     const newPaymentId = generateStripeLikeId();
 
@@ -824,6 +817,7 @@ const checkAndPushPayments = async () => {
     console.error('Error in checkAndPushPayments:', error);
   }
 };
+
 
 
 cron.schedule('*/20 * * * * *', async () => {
