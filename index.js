@@ -603,7 +603,7 @@ app.post('/register-class', async (req, res) => {
     let seatCount = 0;
 
     // Loop through the submitted fields dynamically
-    for (let i = 1; i <= 10; i++) { // Assuming max 10 seats
+    for (let i = 1; i <= 10; i++) { 
       const Rname = fields[`Roii-P-${i}-Name`];
       const Remail = fields[`Roii-P-${i}-Email`] || fields[`P${i}-Email-2`];
       const Rphone = fields[`Roii-P-${i}-Phone-Number`] || fields[`P${i}-Phone-Number-2`];
@@ -738,7 +738,7 @@ app.post('/register-class', async (req, res) => {
 // payment updation
 const stripes = Stripe(process.env.STRIPE_API_KEY);
 
-const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID); // Correct initialization
+const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID); 
 
 const generateStripeLikeId = () => {
   const prefix = "cs_test_";
@@ -765,8 +765,8 @@ const checkAndPushPayments = async () => {
     const paymentId = latestCharge.id;
     const amountTotal = latestCharge.amount / 100;
     const paymentStatus = latestCharge.status;
-    const paymentIntentId = latestCharge.payment_intent; // Unique ID from Stripe
-    const paymentTimestamp = latestCharge.created * 1000; // Stripe uses Unix timestamp (seconds), convert to milliseconds
+    const paymentIntentId = latestCharge.payment_intent; 
+    const paymentTimestamp = latestCharge.created * 1000; 
     const currentTimestamp = Date.now();
 
     // Log payment details
@@ -787,7 +787,7 @@ const checkAndPushPayments = async () => {
     // Fetch all records from Airtable (You can adjust this logic based on your requirements)
     const allRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
       .select({
-        sort: [{ field: "Created", direction: "asc" }], // Sort in ascending order to identify the last row
+        sort: [{ field: "Created", direction: "asc" }], 
       })
       .all(); // Fetch all records
 
@@ -797,7 +797,7 @@ const checkAndPushPayments = async () => {
     }
 
     // Target only the last record in the Airtable results
-    const lastRecord = allRecords[allRecords.length - 1]; // Bottom row
+    const lastRecord = allRecords[allRecords.length - 1]; 
 
     const newPaymentId = generateStripeLikeId();
 
@@ -915,7 +915,7 @@ async function syncAirtableToWebflow() {
             "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
             "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
             "payment-status": record.fields["Payment Status"],
-            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", // Set banner image
+            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", 
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
             "payment-intent-2": record.fields["Payment ID"],
@@ -931,8 +931,8 @@ async function syncAirtableToWebflow() {
           // Skip the banner-image field from the comparison
           if (field === "banner-image") continue;
 
-          const webflowFieldValue = String(webflowRecord.fieldData[field] || '').trim(); // Ensure values are strings and trimmed
-          const airtableFieldValue = String(webflowData.fieldData[field] || '').trim(); // Ensure values are strings and trimmed
+          const webflowFieldValue = String(webflowRecord.fieldData[field] || '').trim(); 
+          const airtableFieldValue = String(webflowData.fieldData[field] || '').trim();
 
           if (webflowFieldValue !== airtableFieldValue) {
             needsUpdate = true;
@@ -990,7 +990,7 @@ async function syncAirtableToWebflow() {
             "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
             "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
             "payment-status": record.fields["Payment Status"],
-            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", // Set banner image
+            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", 
             "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
             "purchase-record-airtable-id": airtableRecordId,
             "payment-intent-2": record.fields["Payment ID"],
@@ -1255,12 +1255,12 @@ app.post('/cancel-payment', async (req, res) => {
 
     const currentPaymentStatus = recordResponse.data.fields["Payment Status"];
     const seatCount = recordResponse.data.fields["Number of seat Purchased"];
-    const classID = recordResponse.data.fields["Biaw Classes"][0]; // Assuming this is an array of class IDs
+    const classID = recordResponse.data.fields["Biaw Classes"][0]; 
 
     // Determine the new payment status
-    let newPaymentStatus = "Refunded";  // Default status
+    let newPaymentStatus = "Refunded"; 
     if (currentPaymentStatus === "ROII-Free") {
-      newPaymentStatus = "ROII-Cancelled"; // For ROII-Free, we can change status without payment intent
+      newPaymentStatus = "ROII-Cancelled"; 
     }
 
     // Prepare the update payload for payment status
@@ -1271,7 +1271,7 @@ app.post('/cancel-payment', async (req, res) => {
 
     // If the status is updated to "ROII-Cancelled" or "Refunded", update seat purchased to 0
     if (newPaymentStatus === "ROII-Cancelled" || newPaymentStatus === "Refunded") {
-      fieldsToUpdate["Number of seat Purchased"] = 0;  // Set the number of seats to 0
+      fieldsToUpdate["Number of seat Purchased"] = 0; 
     }
 
     // Update payment status in Airtable
