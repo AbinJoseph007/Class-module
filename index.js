@@ -795,6 +795,7 @@ const checkAndPushPayments = async () => {
     const lastRecord = allRecords[allRecords.length - 1]; // Target the latest row
     const seatCount = lastRecord.fields["Number of seat Purchased"];
     const classFieldValue = lastRecord.fields["Airtable id"]; // Fetch the class field value
+    const multipleClassRegistrationIds = lastRecord.fields["Multiple Class Registration"] || []; // Linked records
 
     console.log('Class Field Value:', classFieldValue);
 
@@ -841,6 +842,18 @@ const checkAndPushPayments = async () => {
     console.log(
       `Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`
     );
+
+    for (const multipleClassId of multipleClassRegistrationIds) {
+      try {
+        console.log(`Updating record ID ${multipleClassId} in Multiple Class Registration table.`);
+        await airtableBase(AIRTABLE_TABLE_NAME2).update(multipleClassId, {
+          "Payment Status": "Paid",
+        });
+        console.log(`Updated Payment Status to "Paid" for record ID ${multipleClassId}.`);
+      } catch (error) {
+        console.error(`Failed to update record ID ${multipleClassId}:`, error.message);
+      }
+    }
   } catch (error) {
     console.error('Error in checkAndPushPayments:', error);
   }
