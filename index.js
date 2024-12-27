@@ -641,6 +641,7 @@ app.post('/register-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Biaw Classes": [biawClassIds],
+        "Payment Status":"ROII Free"
       };
 
       seatRecords.push(seatRecord);
