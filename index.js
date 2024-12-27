@@ -762,19 +762,16 @@ const checkAndPushPayments = async () => {
       return;
     }
 
-    const paymentId = latestCharge.id;
-    const amountTotal = latestCharge.amount / 100;
-    const paymentStatus = latestCharge.status;
-    const paymentIntentId = latestCharge.payment_intent; 
-    const paymentTimestamp = latestCharge.created * 1000; 
+    const { id: paymentId, amount, status: paymentStatus, payment_intent: paymentIntentId, created: paymentTimestamp } = latestCharge;
+    const amountTotal = amount / 100;
     const currentTimestamp = Date.now();
 
     // Log payment details
     console.log('Latest payment details:', { paymentId, paymentIntentId, amountTotal, paymentStatus, paymentTimestamp });
 
-    // Check if the payment was made more than one minute ago
-    if (currentTimestamp - paymentTimestamp > 20000) {
-      console.log('Payment is older than twenty seconds. Skipping push to Airtable.');
+    // Check if the payment was made more than 20 seconds ago
+    if (currentTimestamp - paymentTimestamp * 1000 > 20000) {
+      console.log('Payment is older than 20 seconds. Skipping push to Airtable.');
       return;
     }
 
@@ -784,35 +781,65 @@ const checkAndPushPayments = async () => {
       return;
     }
 
-    // Fetch all records from Airtable (You can adjust this logic based on your requirements)
-    const allRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
-      .select({
-        sort: [{ field: "Created", direction: "asc" }], 
-      })
-      .all(); // Fetch all records
+    // Fetch the payment record from Airtable using the Payment Intent ID
+    const paymentRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
+      .select({ filterByFormula: `{Payment ID} = '${paymentIntentId}'`, maxRecords: 1 })
+      .firstPage();
 
-    if (allRecords.length === 0) {
-      console.log('No records found in Airtable.');
+    if (paymentRecords.length === 0) {
+      console.log('Payment record not found in Airtable.');
       return;
     }
 
-    // Target only the last record in the Airtable results
-    const lastRecord = allRecords[allRecords.length - 1]; 
+    const paymentRecord = paymentRecords[0];
+    const seatCount = paymentRecord.fields["Number of seat Purchased"];
+    const classFieldValue = paymentRecord.fields["Airtable id"]; // Fetch the field value
 
-    const newPaymentId = generateStripeLikeId();
+    console.log('Class Field Value:', classFieldValue);
 
+    // Fetch the class record from the "Biaw Classes" table
+    const classRecords = await airtableBase("Biaw Classes")
+      .select({ filterByFormula: `{Field ID} = '${classFieldValue}'`, maxRecords: 1 })
+      .firstPage();
+
+    if (classRecords.length === 0) {
+      console.log(`Class record not found in Biaw Classes table for ID: ${classFieldValue}.`);
+      return;
+    }
+
+    const classRecord = classRecords[0];
+    const currentSeatsRemaining = parseInt(classRecord.fields["Number of seats remaining"], 10);
+    const totalPurchasedSeats = parseInt(classRecord.fields["Total Number of Purchased Seats"] || "0", 10);
+
+    // Ensure there are enough seats available for the number of seats purchased
+    if (currentSeatsRemaining < seatCount) {
+      console.log('Not enough seats available for this class.');
+      return;
+    }
+
+    // Update the class record with the new seat information
+    const updatedSeatsRemaining = String(currentSeatsRemaining - seatCount);
+    const updatedTotalPurchasedSeats = String(totalPurchasedSeats + seatCount);
+
+    await airtableBase("Biaw Classes").update(classRecord.id, {
+      "Number of seats remaining": updatedSeatsRemaining,
+      "Total Number of Purchased Seats": updatedTotalPurchasedSeats,
+    });
+
+    console.log(
+      `Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`
+    );
+
+    // Update the payment record in Airtable
     const updatedFields = {
+      "Payment Status": "Paid", // Update payment status
+      "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
       "Payment ID": paymentIntentId,
-      "Amount Total": new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-      }).format(amountTotal),
-      "Payment Status": "Paid", // Update to "Paid"
     };
 
-    console.log(`Updating the last record with ID ${lastRecord.id} in Airtable:`, updatedFields);
-    await airtableBase(AIRTABLE_TABLE_NAME3).update(lastRecord.id, updatedFields);
-    console.log(`Last record with ID ${lastRecord.id} successfully updated.`);
+    await airtableBase(AIRTABLE_TABLE_NAME3).update(paymentRecord.id, updatedFields);
+
+    console.log(`Payment record with ID ${paymentRecord.id} successfully updated.`);
   } catch (error) {
     console.error('Error in checkAndPushPayments:', error);
   }
