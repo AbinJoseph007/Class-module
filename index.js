@@ -1284,12 +1284,13 @@ app.post('/cancel-payment', async (req, res) => {
 
     const currentPaymentStatus = recordResponse.data.fields["Payment Status"];
     const seatCount = recordResponse.data.fields["Number of seat Purchased"];
-    const classID = recordResponse.data.fields["Biaw Classes"][0]; 
+    const classID = recordResponse.data.fields["Biaw Classes"][0];
+    const multipleClassRegistrationIds = recordResponse.data.fields["Multiple Class Registration"] || []; // Linked record IDs
 
     // Determine the new payment status
-    let newPaymentStatus = "Refunded"; 
+    let newPaymentStatus = "Refunded";
     if (currentPaymentStatus === "ROII-Free") {
-      newPaymentStatus = "ROII-Cancelled"; 
+      newPaymentStatus = "ROII-Cancelled";
     }
 
     // Prepare the update payload for payment status
@@ -1300,10 +1301,10 @@ app.post('/cancel-payment', async (req, res) => {
 
     // If the status is updated to "ROII-Cancelled" or "Refunded", update seat purchased to 0
     if (newPaymentStatus === "ROII-Cancelled" || newPaymentStatus === "Refunded") {
-      fieldsToUpdate["Number of seat Purchased"] = 0; 
+      fieldsToUpdate["Number of seat Purchased"] = 0;
     }
 
-    // Update payment status in Airtable
+    // Update payment status in Payment Records
     await axios.patch(
       airtableURL,
       { fields: fieldsToUpdate },
@@ -1334,7 +1335,22 @@ app.post('/cancel-payment', async (req, res) => {
       { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
     );
 
-    console.log(`Updated payment status and seats for class ${classID}`);
+    // Update the "Multiple Class Registration" table
+    for (const multipleClassId of multipleClassRegistrationIds) {
+      const multipleClassURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${multipleClassId}`;
+
+      await axios.patch(
+        multipleClassURL,
+        {
+          fields: {
+            "Payment Status": newPaymentStatus,
+          },
+        },
+        { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Updated payment status for multiple class registrations and payment records`);
 
     // Proceed with Stripe Refund only if paymentIntentId is provided
     let refundId = null;
@@ -1358,6 +1374,7 @@ app.post('/cancel-payment', async (req, res) => {
     res.status(500).json({ message: "Failed to process refund and update records", error: error.message });
   }
 });
+
 
 
 (async () => {
