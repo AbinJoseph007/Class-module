@@ -1389,8 +1389,8 @@ app.post('/cancel-payment', async (req, res) => {
 });
 
 
-/////Admin refundsss
 const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
+const biawClassesUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Biaw Classes`;
 
 // Function to fetch records from Airtable
 async function getRefundRequests() {
@@ -1401,18 +1401,16 @@ async function getRefundRequests() {
             },
         });
 
-        // Filter records based on the combination of fields
         const records = response.data.records.filter(record => {
             const paymentStatus = record.fields['Payment Status'];
             const refundConfirmation = record.fields['Refund Confirmation'];
 
-            // Select only records where Payment Status is "Refunded" AND Refund Confirmation is "Confirmed"
             return paymentStatus === 'Refunded' && refundConfirmation === 'Confirmed';
         });
 
         return records;
     } catch (error) {
-        console.error(`Error fetching Airtable records: ${error.message}`);
+        console.error(`Error fetching Airtable records: ${error.response?.data || error.message}`);
         return [];
     }
 }
@@ -1420,6 +1418,7 @@ async function getRefundRequests() {
 // Function to update Airtable record
 async function updateAirtableRecord(recordId, fields) {
     try {
+        console.log(`Updating record: ${recordId} with fields:`, fields);
         const response = await axios.patch(`${airtableUrl}/${recordId}`, {
             fields,
         }, {
@@ -1430,8 +1429,67 @@ async function updateAirtableRecord(recordId, fields) {
 
         console.log(`Updated Airtable record: ${recordId}`);
     } catch (error) {
-        console.error(`Error updating Airtable: ${error.message}`);
+        console.error(`Error updating Airtable: ${JSON.stringify(error.response?.data || error.message)}`);
     }
+}
+
+// Function to fetch the class record from the "Biaw Classes" table
+async function getClassRecord(classFieldValue) {
+    try {
+        const classRecords = await airtableBase("Biaw Classes")
+            .select({
+                filterByFormula: `{Field ID} = '${classFieldValue}'`,
+                maxRecords: 1,
+            })
+            .firstPage();
+
+        if (classRecords.length === 0) {
+            console.log(`Class record not found in Biaw Classes table for ID: ${classFieldValue}.`);
+            return null;
+        }
+
+        console.log(`Class record found for ID: ${classFieldValue}.`);
+        return classRecords[0];
+    } catch (error) {
+        console.error(`Error fetching class record: ${error.message}`);
+        console.log(classFieldValue);
+
+        return null;
+    }
+}
+
+
+// Function to update Biaw Classes table dynamically based on seats
+async function updateBiawClasses(seatsPurchased, classFieldValue) {
+  try {
+      const classRecord = await getClassRecord(classFieldValue);
+
+      if (classRecord) {
+          const currentRemainingSeats = parseInt(classRecord.fields['Number of seats remaining'], 10) || 0;
+          const currentTotalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'], 10) || 0;
+
+          const updatedRemainingSeats = (currentRemainingSeats + seatsPurchased).toString();
+          const updatedTotalSeats = (currentTotalPurchasedSeats - seatsPurchased).toString();
+
+          console.log('Updating Biaw Classes:', {
+              'Number of seats remaining': updatedRemainingSeats,
+              'Total Number of Purchased Seats': updatedTotalSeats,
+          });
+
+          await axios.patch(`${biawClassesUrl}/${classRecord.id}`, {
+              fields: {
+                  'Number of seats remaining': updatedRemainingSeats,
+                  'Total Number of Purchased Seats': updatedTotalSeats,
+              },
+          }, {
+              headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
+          });
+
+          console.log(`Updated Biaw Classes record: ${classRecord.id}`);
+      }
+  } catch (error) {
+      console.error(`Error updating Biaw Classes: ${JSON.stringify(error.response?.data || error.message)}`);
+  }
 }
 
 // Function to process a refund via Stripe
@@ -1443,58 +1501,57 @@ async function processRefund(paymentIntentId) {
         console.log(`Refund successful for Payment Intent: ${paymentIntentId}`);
         return refund;
     } catch (error) {
-        console.error(`Error processing refund: ${error.message}`);
+        console.error(`Error processing refund: ${JSON.stringify(error.response?.data || error.message)}`);
         return null;
     }
 }
-
 // Function to handle changes in "Payment Status"
 async function handlePaymentStatusUpdates() {
-    try {
-        const response = await axios.get(airtableUrl, {
-            headers: {
-                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-            },
-        });
+  try {
+      const response = await axios.get(airtableUrl, {
+          headers: {
+              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+          },
+      });
 
-        const records = response.data.records.filter(record => {
-            const refundConfirmation = record.fields['Refund Confirmation'];
-            const paymentStatus = record.fields['Payment Status'];
+      const records = response.data.records.filter(record => {
+          const refundConfirmation = record.fields['Refund Confirmation'];
+          const paymentStatus = record.fields['Payment Status'];
 
-            // Skip if Refund Confirmation is already "Confirmed" or "Cancellation Revoked"
-            if (refundConfirmation === 'Confirmed' || refundConfirmation === 'Cancellation Revoked') {
-                return false;
-            }
+          if (refundConfirmation === 'Confirmed' || refundConfirmation === 'Cancellation Revoked') {
+              return false;
+          }
 
-            // Process only if Payment Status is "Refunded"
-            return paymentStatus === 'Refunded';
-        });
+          return paymentStatus === 'Refunded';
+      });
 
-        for (const record of records) {
-            await updateAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
-        }
-    } catch (error) {
-        console.error(`Error handling Payment Status updates: ${error.message}`);
-    }
+      for (const record of records) {
+          await updateAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
+      }
+  } catch (error) {
+      console.error(`Error handling Payment Status updates: ${JSON.stringify(error.response?.data || error.message)}`);
+  }
 }
-
 // Main function to handle refunds
 async function handleRefunds() {
     const refundRequests = await getRefundRequests();
 
     for (const record of refundRequests) {
         const paymentIntentId = record.fields['Payment ID'];
+        const classFieldValue = record.fields['Airtable id'];
+        const seatsPurchased = parseInt(record.fields['Number of seat Purchased'], 10) || 0;
 
         if (paymentIntentId) {
-            // Process refund
             const refund = await processRefund(paymentIntentId);
 
             if (refund && refund.status === 'succeeded') {
-                // Update Airtable to mark the refund as completed
                 await updateAirtableRecord(record.id, {
-                    'Refund Confirmation': 'Refund Completed',
-                    'Payment Status': 'Refund Processed',
+                    'Refund Confirmation': 'Confirmed',
+                    'Payment Status': 'Refunded',
+                    'Number of seat Purchased': 0,
                 });
+
+                await updateBiawClasses(seatsPurchased, classFieldValue);
             }
         } else {
             console.warn(`No Payment ID found for record: ${record.id}`);
@@ -1502,9 +1559,11 @@ async function handleRefunds() {
     }
 }
 
-// Run the handlers at regular intervals
-setInterval(handlePaymentStatusUpdates, 30000); // Update fields when Payment Status is toggled
-setInterval(handleRefunds, 40000); // Process refunds when Refund Confirmation is toggled
+
+
+setInterval(handleRefunds, 50000);
+setInterval(handlePaymentStatusUpdates, 50000);
+
 
 (async () => {
   try {
