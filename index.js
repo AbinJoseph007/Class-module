@@ -1389,6 +1389,122 @@ app.post('/cancel-payment', async (req, res) => {
 });
 
 
+/////Admin refundsss
+const airtableUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
+
+// Function to fetch records from Airtable
+async function getRefundRequests() {
+    try {
+        const response = await axios.get(airtableUrl, {
+            headers: {
+                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            },
+        });
+
+        // Filter records based on the combination of fields
+        const records = response.data.records.filter(record => {
+            const paymentStatus = record.fields['Payment Status'];
+            const refundConfirmation = record.fields['Refund Confirmation'];
+
+            // Select only records where Payment Status is "Refunded" AND Refund Confirmation is "Confirmed"
+            return paymentStatus === 'Refunded' && refundConfirmation === 'Confirmed';
+        });
+
+        return records;
+    } catch (error) {
+        console.error(`Error fetching Airtable records: ${error.message}`);
+        return [];
+    }
+}
+
+// Function to update Airtable record
+async function updateAirtableRecord(recordId, fields) {
+    try {
+        const response = await axios.patch(`${airtableUrl}/${recordId}`, {
+            fields,
+        }, {
+            headers: {
+                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            },
+        });
+
+        console.log(`Updated Airtable record: ${recordId}`);
+    } catch (error) {
+        console.error(`Error updating Airtable: ${error.message}`);
+    }
+}
+
+// Function to process a refund via Stripe
+async function processRefund(paymentIntentId) {
+    try {
+        const refund = await stripe.refunds.create({
+            payment_intent: paymentIntentId,
+        });
+        console.log(`Refund successful for Payment Intent: ${paymentIntentId}`);
+        return refund;
+    } catch (error) {
+        console.error(`Error processing refund: ${error.message}`);
+        return null;
+    }
+}
+
+// Function to handle changes in "Payment Status"
+async function handlePaymentStatusUpdates() {
+    try {
+        const response = await axios.get(airtableUrl, {
+            headers: {
+                Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            },
+        });
+
+        const records = response.data.records.filter(record => {
+            const refundConfirmation = record.fields['Refund Confirmation'];
+            const paymentStatus = record.fields['Payment Status'];
+
+            // Skip if Refund Confirmation is already "Confirmed" or "Cancellation Revoked"
+            if (refundConfirmation === 'Confirmed' || refundConfirmation === 'Cancellation Revoked') {
+                return false;
+            }
+
+            // Process only if Payment Status is "Refunded"
+            return paymentStatus === 'Refunded';
+        });
+
+        for (const record of records) {
+            await updateAirtableRecord(record.id, { 'Refund Confirmation': 'Cancellation Initiated' });
+        }
+    } catch (error) {
+        console.error(`Error handling Payment Status updates: ${error.message}`);
+    }
+}
+
+// Main function to handle refunds
+async function handleRefunds() {
+    const refundRequests = await getRefundRequests();
+
+    for (const record of refundRequests) {
+        const paymentIntentId = record.fields['Payment ID'];
+
+        if (paymentIntentId) {
+            // Process refund
+            const refund = await processRefund(paymentIntentId);
+
+            if (refund && refund.status === 'succeeded') {
+                // Update Airtable to mark the refund as completed
+                await updateAirtableRecord(record.id, {
+                    'Refund Confirmation': 'Refund Completed',
+                    'Payment Status': 'Refund Processed',
+                });
+            }
+        } else {
+            console.warn(`No Payment ID found for record: ${record.id}`);
+        }
+    }
+}
+
+// Run the handlers at regular intervals
+setInterval(handlePaymentStatusUpdates, 30000); // Update fields when Payment Status is toggled
+setInterval(handleRefunds, 40000); // Process refunds when Refund Confirmation is toggled
 
 (async () => {
   try {
