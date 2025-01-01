@@ -1532,6 +1532,37 @@ async function handlePaymentStatusUpdates() {
       console.error(`Error handling Payment Status updates: ${JSON.stringify(error.response?.data || error.message)}`);
   }
 }
+
+// Function to handle updating "Payment Status" for linked "Multiple Class Registration"
+async function updateMultipleClassRegistrationPaymentStatus(recordId, newPaymentStatus) {
+  try {
+      const recordResponse = await axios.get(`${airtableUrl}/${recordId}`, {
+          headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` }
+      });
+
+      const multipleClassRegistrationIds = recordResponse.data.fields["Multiple Class Registration"] || [];
+
+      for (const multipleClassId of multipleClassRegistrationIds) {
+          const multipleClassUrl = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME2}/${multipleClassId}`;
+
+          await axios.patch(
+              multipleClassUrl,
+              {
+                  fields: {
+                      "Payment Status": newPaymentStatus,
+                  },
+              },
+              { headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}`, "Content-Type": "application/json" } }
+          );
+
+          console.log(`Updated Payment Status for Multiple Class Registration ID: ${multipleClassId}`);
+      }
+  } catch (error) {
+      console.error(`Error updating "Payment Status" for linked records: ${error.message}`);
+  }
+}
+
+
 // Main function to handle refunds
 async function handleRefunds() {
     const refundRequests = await getRefundRequests();
@@ -1552,6 +1583,7 @@ async function handleRefunds() {
                 });
 
                 await updateBiawClasses(seatsPurchased, classFieldValue);
+                await updateMultipleClassRegistrationPaymentStatus(record.id, 'Refunded');
             }
         } else {
             console.warn(`No Payment ID found for record: ${record.id}`);
