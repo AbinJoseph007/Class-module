@@ -830,115 +830,68 @@ const generateStripeLikeId = () => {
   return `${prefix}${randomString}`;
 };
 
-const checkAndPushPayments = async () => {
+
+app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const endpointSecret = 'whsec_pbkMNclVuXKryZIZs1apz3D5Ick74sb'; // Replace with your webhook signing secret
+
+  let event;
+
   try {
-    console.log('Checking for the latest payment...');
+    // Verify the Stripe signature
+    const sig = req.headers['stripe-signature'];
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
 
-    // Fetch the most recent charge from Stripe
-    const charges = await stripes.charges.list({ limit: 1 });
-    const latestCharge = charges.data[0];
+  // Handle the event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
 
-    if (!latestCharge) {
-      console.log('No new payments found');
-      return;
-    }
+    const clientReferenceId = session.client_reference_id; // Your unique reference ID
+    const paymentIntentId = session.payment_intent; // Payment Intent ID
+    const amountTotal = session.amount_total / 100; // Total amount in dollars
+    const paymentStatus = session.payment_status; // Payment status
 
-    const { id: paymentId, amount, status: paymentStatus, payment_intent: paymentIntentId, created: paymentTimestamp } = latestCharge;
-    const amountTotal = amount / 100;
-    const currentTimestamp = Date.now();
+    console.log('Checkout session completed:', { clientReferenceId, paymentIntentId, amountTotal, paymentStatus });
 
-    // Log payment details
-    console.log('Latest payment details:', { paymentId, paymentIntentId, amountTotal, paymentStatus, paymentTimestamp });
-
-    // Check if the payment was made more than 20 seconds ago
-    if (currentTimestamp - paymentTimestamp * 1000 > 20000) {
-      console.log('Payment is older than 20 seconds. Skipping push to Airtable.');
-      return;
-    }
-
-    // Ensure the payment is successful before proceeding
-    if (paymentStatus !== 'succeeded') {
-      console.log('Payment not successful. Skipping Airtable update.');
-      return;
-    }
-
-    // Fetch the last record from Airtable (sorted by creation date)
-    const allRecords = await airtableBase(AIRTABLE_TABLE_NAME3)
-      .select({ sort: [{ field: "Created", direction: "asc" }] })
-      .all();
-
-    if (allRecords.length === 0) {
-      console.log('No records found in Airtable.');
-      return;
-    }
-
-    const lastRecord = allRecords[allRecords.length - 1]; // Target the latest row
-    const seatCount = lastRecord.fields["Number of seat Purchased"];
-    const classFieldValue = lastRecord.fields["Airtable id"]; // Fetch the class field value
-    const multipleClassRegistrationIds = lastRecord.fields["Multiple Class Registration"] || []; // Linked records
-
-    console.log('Class Field Value:', classFieldValue);
-
-    // Push updatedFields to Airtable first
-    const updatedFields = {
-      "Payment ID": paymentIntentId,
-      "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
-      "Payment Status": "Paid", // Update to "Paid"
-    };
-
-    console.log(`Updating the last record with ID ${lastRecord.id} in Airtable:`, updatedFields);
-    await airtableBase(AIRTABLE_TABLE_NAME3).update(lastRecord.id, updatedFields);
-    console.log(`Last record with ID ${lastRecord.id} successfully updated.`);
-
-    // Fetch the class record from the "Biaw Classes" table
-    const classRecords = await airtableBase("Biaw Classes")
-      .select({ filterByFormula: `{Field ID} = '${classFieldValue}'`, maxRecords: 1 })
-      .firstPage();
-
-    if (classRecords.length === 0) {
-      console.log(`Class record not found in Biaw Classes table for ID: ${classFieldValue}.`);
-      return;
-    }
-
-    const classRecord = classRecords[0];
-    const currentSeatsRemaining = parseInt(classRecord.fields["Number of seats remaining"], 10);
-    const totalPurchasedSeats = parseInt(classRecord.fields["Total Number of Purchased Seats"] || "0", 10);
-
-    // Ensure there are enough seats available for the number of seats purchased
-    if (currentSeatsRemaining < seatCount) {
-      console.log('Not enough seats available for this class.');
-      return;
-    }
-
-    // Update the class record with the new seat information
-    const updatedSeatsRemaining = String(currentSeatsRemaining - seatCount);
-    const updatedTotalPurchasedSeats = String(totalPurchasedSeats + seatCount);
-
-    await airtableBase("Biaw Classes").update(classRecord.id, {
-      "Number of seats remaining": updatedSeatsRemaining,
-      "Total Number of Purchased Seats": updatedTotalPurchasedSeats,
-    });
-
-    console.log(
-      `Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`
-    );
-
-    for (const multipleClassId of multipleClassRegistrationIds) {
+    if (paymentStatus === 'paid') {
       try {
-        console.log(`Updating record ID ${multipleClassId} in Multiple Class Registration table.`);
-        await airtableBase(AIRTABLE_TABLE_NAME2).update(multipleClassId, {
+        // Update the Airtable record with clientReferenceId
+        const records = await airtableBase(AIRTABLE_TABLE_NAME3)
+          .select({ filterByFormula: `{Client Reference ID} = '${clientReferenceId}'`, maxRecords: 1 })
+          .firstPage();
+
+        if (records.length === 0) {
+          console.log(`No Airtable record found for Client Reference ID: ${clientReferenceId}`);
+          return res.status(404).send('No record found');
+        }
+
+        const recordId = records[0].id;
+
+        // Update the Airtable record with payment details
+        const updatedFields = {
+          "Payment ID": paymentIntentId,
+          "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
           "Payment Status": "Paid",
-        });
-        console.log(`Updated Payment Status to "Paid" for record ID ${multipleClassId}.`);
+          "Payment Intent": clientReferenceId
+        };
+
+        await airtableBase(AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
+
+        console.log(`Airtable record with ID ${recordId} successfully updated.`);
+        res.status(200).send('Webhook processed successfully');
       } catch (error) {
-        console.error(`Failed to update record ID ${multipleClassId}:`, error.message);
+        console.error('Error updating Airtable record:', error.message);
+        res.status(500).send('Internal Server Error');
       }
     }
-  } catch (error) {
-    console.error('Error in checkAndPushPayments:', error);
+  } else {
+    console.log(`Unhandled event type: ${event.type}`);
+    res.status(400).send('Unhandled event type');
   }
-};
-
+});
 
 
 
