@@ -818,70 +818,94 @@ app.post('/register-class', async (req, res) => {
   }
 });
 
-const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID); 
 
+const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
-// Use raw body to handle Stripe signature verification
+const endpointSecret = 'whsec_324b64d18168cbc5053753d722f4c1bb42ee8bda7409a34008fcfdb4a906a33c'; // Replace with your webhook secret
+
+// Webhook handler route
 app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
-  const endpointSecret = 'whsec_324b64d18168cbc5053753d722f4c1bb42ee8bda7409a34008fcfdb4a906a33c'; // Replace with your webhook signing secret
-
   let event;
 
+  // Verify the Stripe webhook signature
   try {
-    // Verify the Stripe signature
     const sig = req.headers['stripe-signature'];
     event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    console.log('✅ Webhook verified:', event.id);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
+    console.error('Request headers:', req.headers);
+    console.error('Request body:', req.body.toString());
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Handle the event
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
+  // Handle different event types
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        console.log('💳 Checkout session completed:', session);
 
-    const clientReferenceId = session.client_reference_id; // Your unique reference ID
-    const paymentIntentId = session.payment_intent; // Payment Intent ID
-    const amountTotal = session.amount_total / 100; // Total amount in dollars
-    const paymentStatus = session.payment_status; // Payment status
+        // Process payment data and update Airtable
+        const clientReferenceId = session.client_reference_id;
+        const paymentIntentId = session.payment_intent;
+        const amountTotal = session.amount_total / 100; // Convert cents to dollars
+        const paymentStatus = session.payment_status;
 
-    console.log('Checkout session completed:', { clientReferenceId, paymentIntentId, amountTotal, paymentStatus });
-
-    if (paymentStatus === 'paid') {
-      try {
-        // Update the Airtable record with clientReferenceId
-        const records = await airtableBase(AIRTABLE_TABLE_NAME3)
-          .select({ filterByFormula: `{Client Reference ID} = '${clientReferenceId}'`, maxRecords: 1 })
-          .firstPage();
-
-        if (records.length === 0) {
-          console.log(`No Airtable record found for Client Reference ID: ${clientReferenceId}`);
-          return res.status(404).send('No record found');
+        if (paymentStatus === 'paid') {
+          await handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal);
         }
 
-        const recordId = records[0].id;
-
-        // Update the Airtable record with payment details
-        const updatedFields = {
-          "Payment ID": paymentIntentId,
-          "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
-          "Payment Status": "Paid",
-        };
-
-        await airtableBase(AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
-
-        console.log(`Airtable record with ID ${recordId} successfully updated.`);
-        res.status(200).send('Webhook processed successfully');
-      } catch (error) {
-        console.error('Error updating Airtable record:', error.message);
-        res.status(500).send('Internal Server Error');
+        break;
       }
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`);
+        break;
     }
-  } else {
-    console.log(`Unhandled event type: ${event.type}`);
-    res.status(400).send('Unhandled event type');
+
+    // Respond to Stripe
+    res.status(200).send('Webhook handled successfully');
+  } catch (error) {
+    console.error('❌ Error handling event:', error.message);
+    res.status(500).send('Internal Server Error');
   }
 });
+
+// Function to handle successful payments
+async function handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal) {
+  console.log('🔄 Processing successful payment:', { clientReferenceId, paymentIntentId, amountTotal });
+
+  try {
+    // Search Airtable for the matching record
+    const records = await airtableBase(process.env.AIRTABLE_TABLE_NAME3)
+      .select({
+        filterByFormula: `{Client Reference ID} = '${clientReferenceId}'`,
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (records.length === 0) {
+      console.log(`⚠️ No Airtable record found for Client Reference ID: ${clientReferenceId}`);
+      return;
+    }
+
+    const recordId = records[0].id;
+
+    // Update the Airtable record with payment details
+    const updatedFields = {
+      "Payment ID": paymentIntentId,
+      "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
+      "Payment Status": "Paid",
+    };
+
+    await airtableBase(process.env.AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
+    console.log(`✅ Airtable record updated successfully. Record ID: ${recordId}`);
+  } catch (error) {
+    console.error('❌ Error updating Airtable record:', error.message);
+    throw error; // Re-throw the error to handle it at the webhook level
+  }
+}
+
 
 
 const airtableBaseURL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME3}`;
