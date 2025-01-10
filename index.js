@@ -823,7 +823,7 @@ const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base
 
 // Use raw body to handle Stripe signature verification
 app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
-  const endpointSecret = 'whsec_pbkMNclVuXKryZIZs1apz3D5Ick74sb'; // Replace with your webhook signing secret
+  const endpointSecret = 'whsec_324b64d18168cbc5053753d722f4c1bb42ee8bda7409a34008fcfdb4a906a33c'; // Replace with your webhook signing secret
 
   let event;
 
