@@ -820,108 +820,74 @@ app.post('/register-class', async (req, res) => {
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
-const endpointSecret = 'whsec_pDkMNclVLuXKryZIzSlapz3D5IcK74sb';  // Updated signing secret from Stripe
 
 // Webhook handler route
-app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
-  let event;
+const endpointSecret = 'whsec_pDkMNclVLuXKryZIzSlapz3D5IcK74sb'; // Replace with your webhook secret
 
-  // Log the raw body to help debug
-  console.log('Raw body:', req.body.toString());  // Log the raw body
+app.post('/webhook', function(request, response) {
+  const sig = request.headers['stripe-signature'];
+  const body = request.body;
+
+  let event = null;
 
   try {
-    const sig = req.headers['stripe-signature'];
-    console.log('Received Stripe signature:', sig);  // Log the received signature for debugging
-
-    // Verify the webhook signature
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
-    console.log('✅ Webhook verified:', event.id);
+    event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
   } catch (err) {
-    console.error('❌ Webhook signature verification failed:', err.message);
-    console.error('Request headers:', req.headers);  // Log the headers for debugging
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+    // invalid signature
+    response.status(400).end();
+    return;
   }
 
-  // Handle the events
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed': {
-        const session = event.data.object;
-        console.log('💳 Checkout session completed:', session);
-
-        // Process payment data and update Airtable
-        const clientReferenceId = session.client_reference_id;
-        const paymentIntentId = session.payment_intent;
-        const amountTotal = session.amount_total / 100;  // Convert cents to dollars
-        const paymentStatus = session.payment_status;
-
-        if (paymentStatus === 'paid') {
-          await handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal);
-        }
-
-        break;
-      }
-      case 'payment_intent.succeeded': {
-        const paymentIntent = event.data.object;
-        console.log('💰 Payment intent succeeded:', paymentIntent);
-
-        // You can add further processing for payment intent success if needed
-        break;
-      }
-      case 'charge.succeeded': {
-        const charge = event.data.object;
-        console.log('💳 Charge succeeded:', charge);
-
-        // Further processing for charge succeeded if needed
-        break;
-      }
-      default:
-        console.log(`ℹ️ Unhandled event type: ${event.type}`);
-        break;
-    }
-
-    // Respond to Stripe
-    res.status(200).send('Webhook handled successfully');
-  } catch (error) {
-    console.error('❌ Error handling event:', error.message);
-    res.status(500).send('Internal Server Error');
+  let intent = null;
+  switch (event['type']) {
+    case 'payment_intent.succeeded':
+      intent = event.data.object;
+      console.log("Succeeded:", intent.id);
+      break;
+    case 'payment_intent.payment_failed':
+      intent = event.data.object;
+      const message = intent.last_payment_error && intent.last_payment_error.message;
+      console.log('Failed:', intent.id, message);
+      break;
   }
+
+  response.sendStatus(200);
 });
 
 // Function to handle successful payments
-async function handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal) {
-  console.log('🔄 Processing successful payment:', { clientReferenceId, paymentIntentId, amountTotal });
+// async function handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal) {
+//   console.log('🔄 Processing successful payment:', { clientReferenceId, paymentIntentId, amountTotal });
 
-  try {
-    // Search Airtable for the matching record
-    const records = await airtableBase(process.env.AIRTABLE_TABLE_NAME)
-      .select({
-        filterByFormula: `{Client Reference ID} = '${clientReferenceId}'`,
-        maxRecords: 1,
-      })
-      .firstPage();
+//   try {
+//     // Search Airtable for the matching record
+//     const records = await airtableBase(process.env.AIRTABLE_TABLE_NAME)
+//       .select({
+//         filterByFormula: `{Client Reference ID} = '${clientReferenceId}'`,
+//         maxRecords: 1,
+//       })
+//       .firstPage();
 
-    if (records.length === 0) {
-      console.log(`⚠️ No Airtable record found for Client Reference ID: ${clientReferenceId}`);
-      return;
-    }
+//     if (records.length === 0) {
+//       console.log(`⚠️ No Airtable record found for Client Reference ID: ${clientReferenceId}`);
+//       return;
+//     }
 
-    const recordId = records[0].id;
+//     const recordId = records[0].id;
 
-    // Update the Airtable record with payment details
-    const updatedFields = {
-      "Payment ID": paymentIntentId,
-      "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
-      "Payment Status": "Paid",
-    };
+//     // Update the Airtable record with payment details
+//     const updatedFields = {
+//       "Payment ID": paymentIntentId,
+//       "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
+//       "Payment Status": "Paid",
+//     };
 
-    await airtableBase(process.env.AIRTABLE_TABLE_NAME).update(recordId, updatedFields);
-    console.log(`✅ Airtable record updated successfully. Record ID: ${recordId}`);
-  } catch (error) {
-    console.error('❌ Error updating Airtable record:', error.message);
-    throw error;  // Re-throw the error to handle it at the webhook level
-  }
-}
+//     await airtableBase(process.env.AIRTABLE_TABLE_NAME).update(recordId, updatedFields);
+//     console.log(`✅ Airtable record updated successfully. Record ID: ${recordId}`);
+//   } catch (error) {
+//     console.error('❌ Error updating Airtable record:', error.message);
+//     throw error;  // Re-throw the error to handle it at the webhook level
+//   }
+// }
 
 
 
