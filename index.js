@@ -820,34 +820,71 @@ app.post('/register-class', async (req, res) => {
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
-const endpointSecret = 'whsec_324b64d18168cbc5053753d722f4c1bb42ee8bda7409a34008fcfdb4a906a33c'; // Replace with your webhook secret
+const endpointSecret = 'whsec_pDkMNclVLuXKryZIzSlapz3D5IcK74sb';  // Updated signing secret from Stripe
 
 // Webhook handler route
 app.post('/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
-  console.log('🔍 Incoming webhook request...');
-  console.log('Headers:', req.headers);
-  console.log('Body:', req.body.toString()); // Ensure raw body is logged for debugging
+  let event;
+
+  // Log the raw body to help debug
+  console.log('Raw body:', req.body.toString());  // Log the raw body
 
   try {
     const sig = req.headers['stripe-signature'];
-    const event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    console.log('Received Stripe signature:', sig);  // Log the received signature for debugging
 
-    console.log('✅ Webhook event verified:', event.id);
-
-    // Handle specific event types
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      console.log('💳 Checkout session completed:', session);
-
-      // Add your payment handling logic here
-      res.status(200).send('Webhook processed successfully');
-    } else {
-      console.log(`ℹ️ Unhandled event type: ${event.type}`);
-      res.status(200).send('Event received');
-    }
+    // Verify the webhook signature
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    console.log('✅ Webhook verified:', event.id);
   } catch (err) {
     console.error('❌ Webhook signature verification failed:', err.message);
+    console.error('Request headers:', req.headers);  // Log the headers for debugging
     return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the events
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        console.log('💳 Checkout session completed:', session);
+
+        // Process payment data and update Airtable
+        const clientReferenceId = session.client_reference_id;
+        const paymentIntentId = session.payment_intent;
+        const amountTotal = session.amount_total / 100;  // Convert cents to dollars
+        const paymentStatus = session.payment_status;
+
+        if (paymentStatus === 'paid') {
+          await handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal);
+        }
+
+        break;
+      }
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object;
+        console.log('💰 Payment intent succeeded:', paymentIntent);
+
+        // You can add further processing for payment intent success if needed
+        break;
+      }
+      case 'charge.succeeded': {
+        const charge = event.data.object;
+        console.log('💳 Charge succeeded:', charge);
+
+        // Further processing for charge succeeded if needed
+        break;
+      }
+      default:
+        console.log(`ℹ️ Unhandled event type: ${event.type}`);
+        break;
+    }
+
+    // Respond to Stripe
+    res.status(200).send('Webhook handled successfully');
+  } catch (error) {
+    console.error('❌ Error handling event:', error.message);
+    res.status(500).send('Internal Server Error');
   }
 });
 
@@ -857,7 +894,7 @@ async function handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTo
 
   try {
     // Search Airtable for the matching record
-    const records = await airtableBase(process.env.AIRTABLE_TABLE_NAME3)
+    const records = await airtableBase(process.env.AIRTABLE_TABLE_NAME)
       .select({
         filterByFormula: `{Client Reference ID} = '${clientReferenceId}'`,
         maxRecords: 1,
@@ -878,13 +915,14 @@ async function handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTo
       "Payment Status": "Paid",
     };
 
-    await airtableBase(process.env.AIRTABLE_TABLE_NAME3).update(recordId, updatedFields);
+    await airtableBase(process.env.AIRTABLE_TABLE_NAME).update(recordId, updatedFields);
     console.log(`✅ Airtable record updated successfully. Record ID: ${recordId}`);
   } catch (error) {
     console.error('❌ Error updating Airtable record:', error.message);
-    throw error; // Re-throw the error to handle it at the webhook level
+    throw error;  // Re-throw the error to handle it at the webhook level
   }
 }
+
 
 
 
