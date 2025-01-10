@@ -994,67 +994,75 @@ async function syncAirtableToWebflow() {
 
     for (const record of airtableRecords) {
       const airtableRecordId = record.id;
+      const paymentStatus = record.fields["Payment Status"];
+      const refundConfirmation = record.fields["Refund Confirmation"];
 
       // Skip records with "Payment Status" as "Pending"
-      if (record.fields["Payment Status"] === "Pending") {
+      if (paymentStatus === "Pending") {
         console.log(`Skipping record with Airtable ID ${airtableRecordId} due to Pending Payment Status.`);
         continue;
       }
+
+      // Check if "Refund Confirmation" is required
+      const requiresRefundConfirmation = ["ROII-Cancelled", "Cancelled Without Refund", "Refunded"].includes(paymentStatus);
+      if (requiresRefundConfirmation && refundConfirmation !== "Confirmed") {
+        console.log(
+          `Skipping record with Airtable ID ${airtableRecordId} as "Refund Confirmation" is not Confirmed for Payment Status: ${paymentStatus}.`
+        );
+        continue;
+      }
+
+      console.log(`Processing record with Airtable ID ${airtableRecordId} for Payment Status: ${paymentStatus}.`);
+
+      const biawClassesDetails = [];
+      if (record.fields["Biaw Classes"]) {
+        for (const classId of record.fields["Biaw Classes"]) {
+          try {
+            const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
+            biawClassesDetails.push(classResponse.data.fields);
+          } catch (classError) {
+            console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
+          }
+        }
+      }
+
+      console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
+
+      const webflowData = {
+        fieldData: {
+          name: biawClassesDetails[0]?.Name || "",
+          _archived: false,
+          _draft: false,
+          "field-id": record.fields["Airtable id"],
+          "member-id": record.fields["Client ID"],
+          "mail-id": record.fields["Email"],
+          "total-amount": record.fields["Amount Total"] || "Free",
+          "purchase-class-name": biawClassesDetails[0]?.Name || "",
+          "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
+          "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
+          "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
+          "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
+          "payment-status": paymentStatus,
+          "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+          "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
+          "purchase-record-airtable-id": airtableRecordId,
+          "payment-intent-2": record.fields["Payment ID"],
+          "class-url": record.fields["Purchased Class url"] || ""
+        },
+      };
 
       // Check if the record already exists in Webflow
       if (webflowRecordIds.has(airtableRecordId)) {
         const webflowRecord = existingWebflowRecords.find(r => r.fieldData["purchase-record-airtable-id"] === airtableRecordId);
 
-        const biawClassesDetails = [];
-        if (record.fields["Biaw Classes"]) {
-          for (const classId of record.fields["Biaw Classes"]) {
-            try {
-              const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
-              biawClassesDetails.push(classResponse.data.fields);
-            } catch (classError) {
-              console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
-            }
-          }
-        }
-
-        console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
-
-        // Prepare the new data to be sent to Webflow
-        const webflowData = {
-          fieldData: {
-            name: biawClassesDetails[0]?.Name || "",
-            _archived: false,
-            _draft: false,
-            "field-id": record.fields["Airtable id"],
-            "member-id": record.fields["Client ID"],
-            "mail-id": record.fields["Email"],
-            "total-amount": record.fields["Amount Total"]
-              ? record.fields["Amount Total"]
-              : "Free",
-            "purchase-class-name": biawClassesDetails[0]?.Name || "",
-            "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
-            "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
-            "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
-            "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
-            "payment-status": record.fields["Payment Status"],
-            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", 
-            "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
-            "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2": record.fields["Payment ID"],
-            "class-url": record.fields["Purchased Class url"] || ""
-          },
-        };
-
-        // Compare fields one by one to track changes, excluding banner-image
         const fieldsToUpdate = {};
         let needsUpdate = false;
 
         for (const field in webflowData.fieldData) {
-          // Skip the banner-image field from the comparison
           if (field === "banner-image") continue;
 
-          const webflowFieldValue = String(webflowRecord.fieldData[field] || '').trim(); 
-          const airtableFieldValue = String(webflowData.fieldData[field] || '').trim();
+          const webflowFieldValue = String(webflowRecord.fieldData[field] || "").trim();
+          const airtableFieldValue = String(webflowData.fieldData[field] || "").trim();
 
           if (webflowFieldValue !== airtableFieldValue) {
             needsUpdate = true;
@@ -1062,17 +1070,12 @@ async function syncAirtableToWebflow() {
           }
         }
 
-        // Only send an update if there are changed fields
         if (needsUpdate) {
-          console.log(`Record with Airtable ID ${airtableRecordId} has changes. Updating the following fields: ${Object.keys(fieldsToUpdate).join(', ')}`);
-
-          // Prepare the update data with only changed fields
-          const updateData = { fieldData: fieldsToUpdate };
-
+          console.log(`Record with Airtable ID ${airtableRecordId} has changes. Updating the following fields: ${Object.keys(fieldsToUpdate).join(", ")}`);
           try {
             const updateURL = `${webflowBaseURL}/${webflowRecord.id}`;
-            const webflowUpdateResponse = await axios.patch(updateURL, updateData, { headers: webflowHeaders });
-            console.log(`Successfully updated record in Webflow:`, webflowUpdateResponse.data);
+            await axios.patch(updateURL, { fieldData: fieldsToUpdate }, { headers: webflowHeaders });
+            console.log(`Successfully updated record in Webflow.`);
           } catch (webflowError) {
             console.error(`Error updating record in Webflow:`, webflowError.response?.data || webflowError.message);
           }
@@ -1080,50 +1083,9 @@ async function syncAirtableToWebflow() {
           console.log(`Record with Airtable ID ${airtableRecordId} is up to date in Webflow. No update needed.`);
         }
       } else {
-        // If record doesn't exist in Webflow, create a new one
-        const biawClassesDetails = [];
-        if (record.fields["Biaw Classes"]) {
-          for (const classId of record.fields["Biaw Classes"]) {
-            try {
-              const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
-              biawClassesDetails.push(classResponse.data.fields);
-            } catch (classError) {
-              console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
-            }
-          }
-        }
-
-        console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
-
-        const webflowData = {
-          fieldData: {
-            name: biawClassesDetails[0]?.Name || "",
-            _archived: false,
-            _draft: false,
-            "field-id": record.fields["Airtable id"],
-            "member-id": record.fields["Client ID"],
-            "mail-id": record.fields["Email"],
-            "total-amount": record.fields["Amount Total"]
-              ? record.fields["Amount Total"]
-              : "Free",
-            "purchase-class-name": biawClassesDetails[0]?.Name || "",
-            "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
-            "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
-            "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
-            "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
-            "payment-status": record.fields["Payment Status"],
-            "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "", 
-            "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
-            "purchase-record-airtable-id": airtableRecordId,
-            "payment-intent-2": record.fields["Payment ID"],
-            "class-url": record.fields["Purchased Class url"] || ""
-          },
-        };
-
-        // Create a new record in Webflow
         try {
-          const webflowResponse = await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
-          console.log(`Successfully pushed new record to Webflow:`, webflowResponse.data);
+          await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
+          console.log(`Successfully pushed new record to Webflow.`);
         } catch (webflowError) {
           console.error(`Error pushing new record to Webflow:`, webflowError.response?.data || webflowError.message);
         }
