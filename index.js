@@ -10,50 +10,89 @@ require('dotenv').config();
 
 const app = express();
 
-app.use(
-  '/webhook',
-  express.raw({ type: 'application/json' }) // This ensures we get raw body as a Buffer
-);
+Airtable.configure({
+  apiKey: "patIHe0hP6zpwFfqh.f6ec6a072da7f4da9df3f6a1024844d2c4c486e81d2583e40be68ead09f6c868",
+});
 
-// Stripe webhook secret from environment (replace with actual secret)
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET; // e.g., 'whsec_...'
+const base2 = Airtable.base("app8pm9JBk0lffXMW");
 
-// Webhook handler route
-app.post('/webhook', (req, res) => {
-  const sig = req.headers['stripe-signature']; // The signature from the header
-  const rawBody = req.body; // The raw body, still a Buffer, not parsed
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET; 
+
+
+app.use('/webhook', express.raw({ type: 'application/json' }));
+
+let sessionData = {};
+
+app.post('/webhook', async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const rawBody = req.body;
 
   let event;
 
   try {
-    // Use the raw body for Stripe's signature verification
     event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err) {
-    // If signature verification fails, log the error and return a 400
     console.error('⚠️ Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Handle different event types (you can add more cases as needed)
   switch (event.type) {
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object; // The payment intent object
-      console.log('PaymentIntent was successful!', paymentIntent.id);
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      const clientReferenceId = session.client_reference_id;
+      const paymentIntentId = session.payment_intent;
+
+      // Store session data for later use
+      sessionData[paymentIntentId] = { clientReferenceId };
+      console.log(`Stored session data for PaymentIntent: ${paymentIntentId}`);
       break;
 
-    case 'payment_intent.payment_failed':
-      const failedIntent = event.data.object; // The failed payment intent object
-      const message = failedIntent.last_payment_error?.message;
-      console.error('PaymentIntent failed:', failedIntent.id, message);
+    case 'payment_intent.succeeded':
+      const paymentIntent = event.data.object;
+      const amountTotal = paymentIntent.amount;
+
+      if (sessionData[paymentIntent.id]) {
+        const { clientReferenceId } = sessionData[paymentIntent.id];
+
+        try {
+          const records = await base2("Payment Records")
+            .select({
+              sort: [{ field: 'Created Time', direction: 'desc' }], // Ensure 'Created Time' is the correct field
+              maxRecords: 3,
+            })
+            .firstPage();
+
+          let matchingRecord = records.find(record => record.id === clientReferenceId);
+
+          if (matchingRecord) {
+            await base2("Payment Records").update(matchingRecord.id, {
+              'Payment ID': paymentIntent.id,
+              'Amount Total': new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal / 100),
+              'Payment Status': 'Paid',
+            });
+            console.log('Airtable record updated successfully.');
+          } else {
+            console.log('No matching Airtable record found.');
+          }
+        } catch (error) {
+          console.error('Error updating Airtable record:', error);
+        }
+
+        // Clean up the session data
+        delete sessionData[paymentIntent.id];
+      } else {
+        console.log('No session data found for this PaymentIntent.');
+      }
       break;
 
     default:
       console.log(`Unhandled event type ${event.type}`);
   }
 
-  // Respond to Stripe with a 200 OK status to acknowledge the webhook
   res.status(200).send('Received');
 });
+
+
 
 
 app.use(express.json());
