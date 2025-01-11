@@ -21,7 +21,8 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
-let sessionData = {};
+// Temporary storage for event data
+const eventStore = {};
 
 app.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
@@ -39,34 +40,37 @@ app.post('/webhook', async (req, res) => {
   switch (event.type) {
     case 'checkout.session.completed':
       const session = event.data.object;
-      const clientReferenceId = session.client_reference_id;
       const paymentIntentId = session.payment_intent;
+      const clientReferenceId = session.client_reference_id;
 
-      // Store session data for later use
-      sessionData[paymentIntentId] = { clientReferenceId };
-      console.log(`Stored session data for PaymentIntent: ${paymentIntentId}`);
+      // Store client reference ID using the payment intent ID
+      eventStore[paymentIntentId] = { clientReferenceId };
+      console.log(`Stored client reference ID for PaymentIntent: ${paymentIntentId}`);
       break;
 
     case 'payment_intent.succeeded':
       const paymentIntent = event.data.object;
       const amountTotal = paymentIntent.amount;
+      const paymentIntentIdSucceeded = paymentIntent.id;
 
-      if (sessionData[paymentIntent.id]) {
-        const { clientReferenceId } = sessionData[paymentIntent.id];
+      if (eventStore[paymentIntentIdSucceeded] && eventStore[paymentIntentIdSucceeded].clientReferenceId) {
+        const clientReferenceId = eventStore[paymentIntentIdSucceeded].clientReferenceId;
 
         try {
+          // Fetch the latest three records from Airtable
           const records = await base2("Payment Records")
             .select({
-              sort: [{ field: 'Created Time', direction: 'desc' }], // Ensure 'Created Time' is the correct field
+              sort: [{ field: 'Created Time', direction: 'desc' }],
               maxRecords: 3,
             })
             .firstPage();
 
-          let matchingRecord = records.find(record => record.id === clientReferenceId);
+          // Find the matching record by client reference ID
+          const matchingRecord = records.find(record => record.id === clientReferenceId);
 
           if (matchingRecord) {
             await base2("Payment Records").update(matchingRecord.id, {
-              'Payment ID': paymentIntent.id,
+              'Payment ID': paymentIntentIdSucceeded,
               'Amount Total': new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal / 100),
               'Payment Status': 'Paid',
             });
@@ -78,8 +82,8 @@ app.post('/webhook', async (req, res) => {
           console.error('Error updating Airtable record:', error);
         }
 
-        // Clean up the session data
-        delete sessionData[paymentIntent.id];
+        // Clean up the stored data
+        delete eventStore[paymentIntentIdSucceeded];
       } else {
         console.log('No session data found for this PaymentIntent.');
       }
@@ -91,7 +95,6 @@ app.post('/webhook', async (req, res) => {
 
   res.status(200).send('Received');
 });
-
 
 
 
