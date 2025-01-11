@@ -38,7 +38,6 @@ app.post('/webhook', async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Handle checkout.session.completed event
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
 
@@ -55,33 +54,81 @@ app.post('/webhook', async (req, res) => {
 
     try {
       const records = await base2('Payment Records')
-    .select({
-      sort: [{ field: "Created", direction: "desc" }],
-      maxRecords: 2,  
-    })
-    .firstPage();
+        .select({
+          sort: [{ field: 'Created', direction: 'desc' }],
+          maxRecords: 2,
+        })
+        .firstPage();
 
-  // Log the fetched records and clientReferenceId for debugging
-  console.log('Fetched records:', records);
-  console.log('Client Reference ID:', clientReferenceId);
-
-  // Ensure the IDs are both compared as strings
-  const matchingRecord = records.find(record => String(record.id) === String(clientReferenceId));
-
+      const matchingRecord = records.find(
+        (record) => String(record.id) === String(clientReferenceId)
+      );
 
       if (matchingRecord) {
-        // Update Airtable record
+        // Update the matching payment record
         await base2('Payment Records').update(matchingRecord.id, {
           'Payment ID': paymentIntentId,
           'Amount Total': formatCurrency(amountTotal),
           'Payment Status': 'Paid',
         });
-        console.log(`Airtable record (${clientReferenceId}) updated successfully.`);
+        console.log(`Payment record (${clientReferenceId}) updated successfully.`);
       } else {
-        console.log(`No matching Airtable record found for clientReferenceId: ${clientReferenceId}`);
+        console.warn(`No matching Airtable record found for clientReferenceId: ${clientReferenceId}`);
+      }
+
+      // Proceed to update class and field data
+      const lastRecord = matchingRecord; // Assuming the last fetched record
+      const seatCount = parseInt(lastRecord.fields['Number of seat Purchased'], 10);
+      const classFieldValue = lastRecord.fields['Airtable id'];
+      const multipleClassRegistrationIds = lastRecord.fields['Multiple Class Registration'] || [];
+
+      const classRecords = await base2('Biaw Classes')
+        .select({
+          filterByFormula: `{Field ID} = '${classFieldValue}'`,
+          maxRecords: 1,
+        })
+        .firstPage();
+
+      if (classRecords.length === 0) {
+        console.warn(`Class record not found for ID: ${classFieldValue}`);
+        return;
+      }
+
+      const classRecord = classRecords[0];
+      const currentSeatsRemaining = parseInt(classRecord.fields['Number of seats remaining'], 10);
+      const totalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'] || '0', 10);
+
+      if (currentSeatsRemaining < seatCount) {
+        console.error('Not enough seats available for this class.');
+        return;
+      }
+
+      // Update class record with new seat counts
+      await base2('Biaw Classes').update(classRecord.id, {
+        'Number of seats remaining': String(currentSeatsRemaining - seatCount),
+        'Total Number of Purchased Seats': String(totalPurchasedSeats + seatCount),
+      });
+
+      console.log(
+        `Class record updated. Remaining seats: ${
+          currentSeatsRemaining - seatCount
+        }, Total purchased seats: ${totalPurchasedSeats + seatCount}`
+      );
+
+      // Update multiple class registration records
+      for (const multipleClassId of multipleClassRegistrationIds) {
+        try {
+          console.log(`Updating record ID ${multipleClassId} in Multiple Class Registration table.`);
+          await base2(AIRTABLE_TABLE_NAME2).update(multipleClassId, {
+            'Payment Status': 'Paid',
+          });
+          console.log(`Payment Status updated to "Paid" for record ID ${multipleClassId}.`);
+        } catch (error) {
+          console.error(`Failed to update record ID ${multipleClassId}:`, error.message);
+        }
       }
     } catch (error) {
-      console.error('Error updating Airtable record:', error);
+      console.error('Error processing the webhook event:', error);
     }
   } else {
     console.log(`Unhandled event type: ${event.type}`);
@@ -89,6 +136,7 @@ app.post('/webhook', async (req, res) => {
 
   res.status(200).send('Received');
 });
+
 
 // Helper function to format currency
 function formatCurrency(amount) {
