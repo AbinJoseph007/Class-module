@@ -54,15 +54,26 @@ app.post('/webhook', async (req, res) => {
 
     try {
       // Fetch the latest three records from Airtable
-      const records = await base2('Payment Records')
-        .select({
-          sort: [{ field: "Created", direction: "asc" }],
-          maxRecords: 3,
-        })
-        .firstPage();
+      // Dynamically fetch records from Airtable or another source
+const records = await base2('Payment Records')
+.select({
+  sort: [{ field: "Created", direction: "asc" }],
+  maxRecords: 3,
+})
+.firstPage();
 
-      // Find the matching record by client reference ID
-      const matchingRecord = records.find(record => record.id === clientReferenceId);
+// Example of a dynamic clientReferenceId (this could be any value passed to your code)
+const clientReferenceIds = clientReferenceId;
+// Loop through the fetched records and check for a match
+records.forEach(record => {
+if (record.id === clientReferenceIds) {
+  // If the record's id matches the clientReferenceId, update the field
+  record.fieldToUpdate = matchingRecord; // Modify the field you want to update
+
+  // Optionally, you can add code to update this record in the database
+  console.log('Matching record found, updated:', record);
+}
+});
 
       if (matchingRecord) {
         // Update Airtable record
