@@ -56,14 +56,19 @@ app.post('/webhook', async (req, res) => {
     try {
       // Fetch the latest three records from Airtable
       const records = await base2('Payment Records')
-        .select({
-          sort: [{ field: "Created", direction: "asc" }],
-          maxRecords: 1,
-        })
-        .firstPage();
+    .select({
+      sort: [{ field: "Created", direction: "asc" }],
+      maxRecords: 1,  // Limit to the first record
+    })
+    .firstPage();
 
-      // Find the matching record by client reference ID
-      const matchingRecord = records.find(record => record.id === clientReferenceId);
+  // Log the fetched records and clientReferenceId for debugging
+  console.log('Fetched records:', records);
+  console.log('Client Reference ID:', clientReferenceId);
+
+  // Ensure the IDs are both compared as strings
+  const matchingRecord = records.find(record => String(record.id) === String(clientReferenceId));
+
 
       if (matchingRecord) {
         // Update Airtable record
