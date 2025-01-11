@@ -9,6 +9,53 @@ const bodyParser = require('body-parser');
 require('dotenv').config();
 
 const app = express();
+
+app.use(
+  '/webhook',
+  express.raw({ type: 'application/json' }) // This ensures we get raw body as a Buffer
+);
+
+// Stripe webhook secret from environment (replace with actual secret)
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET; // e.g., 'whsec_...'
+
+// Webhook handler route
+app.post('/webhook', (req, res) => {
+  const sig = req.headers['stripe-signature']; // The signature from the header
+  const rawBody = req.body; // The raw body, still a Buffer, not parsed
+
+  let event;
+
+  try {
+    // Use the raw body for Stripe's signature verification
+    event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
+  } catch (err) {
+    // If signature verification fails, log the error and return a 400
+    console.error('⚠️ Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle different event types (you can add more cases as needed)
+  switch (event.type) {
+    case 'payment_intent.succeeded':
+      const paymentIntent = event.data.object; // The payment intent object
+      console.log('PaymentIntent was successful!', paymentIntent.id);
+      break;
+
+    case 'payment_intent.payment_failed':
+      const failedIntent = event.data.object; // The failed payment intent object
+      const message = failedIntent.last_payment_error?.message;
+      console.error('PaymentIntent failed:', failedIntent.id, message);
+      break;
+
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  // Respond to Stripe with a 200 OK status to acknowledge the webhook
+  res.status(200).send('Received');
+});
+
+
 app.use(express.json());
 
 const allowedOrigins = [
@@ -819,45 +866,7 @@ app.post('/register-class', async (req, res) => {
 });
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
-app.use(
-  '/webhook',
-  bodyParser.raw({ type: 'application/json' }) // Ensures the body is passed as raw
-);
 
-const endpointSecret = 'whsec_324b64d18168cbc5053753d722f4c1bb42ee8bda7409a34008fcfdb4a906a33c'; // Replace with your signing secret
-
-app.post('/webhook', (request, response) => {
-  const sig = request.headers['stripe-signature'];
-  let event;
-
-  try {
-    // Use the raw body for signature verification
-    event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
-  } catch (err) {
-    console.error('⚠️ Webhook signature verification failed.', err.message);
-    response.status(400).send(`Webhook Error: ${err.message}`);
-    return;
-  }
-
-  // Handle event types
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object;
-      console.log('PaymentIntent was successful!', paymentIntent.id);
-      break;
-
-    case 'payment_intent.payment_failed':
-      const failedIntent = event.data.object;
-      const message = failedIntent.last_payment_error?.message;
-      console.error('PaymentIntent failed:', failedIntent.id, message);
-      break;
-
-    default:
-      console.log(`Unhandled event type ${event.type}`);
-  }
-
-  response.status(200).send('Received');
-});
 
 
 // Function to handle successful payments
