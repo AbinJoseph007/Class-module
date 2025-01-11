@@ -56,7 +56,7 @@ app.post('/webhook', async (req, res) => {
       // Fetch the latest three records from Airtable
       const records = await base2('Payment Records')
         .select({
-          sort: [{ field: 'Created Time', direction: 'desc' }],
+          sort: [{ field: "Created", direction: "asc" }],
           maxRecords: 3,
         })
         .firstPage();
