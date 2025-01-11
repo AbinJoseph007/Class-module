@@ -24,12 +24,14 @@ app.use('/webhook', express.raw({ type: 'application/json' }));
 // Temporary storage for event data
 const eventStore = {};
 
+const eventStore = {};
+
+// Webhook handler
 app.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const rawBody = req.body;
 
   let event;
-
   try {
     event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err) {
@@ -38,55 +40,12 @@ app.post('/webhook', async (req, res) => {
   }
 
   switch (event.type) {
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      const paymentIntentId = session.payment_intent;
-      const clientReferenceId = session.client_reference_id;
-
-      // Store client reference ID using the payment intent ID
-      eventStore[paymentIntentId] = { clientReferenceId };
-      console.log(`Stored client reference ID for PaymentIntent: ${paymentIntentId}`);
+    case 'payment_intent.succeeded':
+      await handlePaymentIntentSucceeded(event.data.object);
       break;
 
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object;
-      const amountTotal = paymentIntent.amount;
-      const paymentIntentIdSucceeded = paymentIntent.id;
-
-      if (eventStore[paymentIntentIdSucceeded] && eventStore[paymentIntentIdSucceeded].clientReferenceId) {
-        const clientReferenceId = eventStore[paymentIntentIdSucceeded].clientReferenceId;
-
-        try {
-          // Fetch the latest three records from Airtable
-          const records = await base2("Payment Records")
-            .select({
-              sort: [{ field: 'Created Time', direction: 'desc' }],
-              maxRecords: 3,
-            })
-            .firstPage();
-
-          // Find the matching record by client reference ID
-          const matchingRecord = records.find(record => record.id === clientReferenceId);
-
-          if (matchingRecord) {
-            await base2("Payment Records").update(matchingRecord.id, {
-              'Payment ID': paymentIntentIdSucceeded,
-              'Amount Total': new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal / 100),
-              'Payment Status': 'Paid',
-            });
-            console.log('Airtable record updated successfully.');
-          } else {
-            console.log('No matching Airtable record found.');
-          }
-        } catch (error) {
-          console.error('Error updating Airtable record:', error);
-        }
-
-        // Clean up the stored data
-        delete eventStore[paymentIntentIdSucceeded];
-      } else {
-        console.log('No session data found for this PaymentIntent.');
-      }
+    case 'checkout.session.completed':
+      await handleCheckoutSessionCompleted(event.data.object);
       break;
 
     default:
@@ -95,6 +54,87 @@ app.post('/webhook', async (req, res) => {
 
   res.status(200).send('Received');
 });
+
+// Handle payment_intent.succeeded
+async function handlePaymentIntentSucceeded(paymentIntent) {
+  const { id: paymentIntentId, amount: amountTotal } = paymentIntent;
+
+  // Store payment intent details
+  if (!eventStore[paymentIntentId]) {
+    eventStore[paymentIntentId] = {};
+  }
+  eventStore[paymentIntentId].amountTotal = amountTotal;
+
+  console.log(`Stored payment intent details for PaymentIntent: ${paymentIntentId}`);
+
+  // Check if client_reference_id is already available
+  if (eventStore[paymentIntentId].clientReferenceId) {
+    await updateAirtableRecord(paymentIntentId);
+  }
+}
+
+// Handle checkout.session.completed
+async function handleCheckoutSessionCompleted(session) {
+  const { payment_intent: paymentIntentId, client_reference_id: clientReferenceId } = session;
+
+  if (!paymentIntentId || !clientReferenceId) {
+    console.warn('Missing payment_intent or client_reference_id in session');
+    return;
+  }
+
+  // Store client reference ID
+  if (!eventStore[paymentIntentId]) {
+    eventStore[paymentIntentId] = {};
+  }
+  eventStore[paymentIntentId].clientReferenceId = clientReferenceId;
+
+  console.log(`Stored client reference ID for PaymentIntent: ${paymentIntentId}`);
+
+  // Check if payment intent details are already available
+  if (eventStore[paymentIntentId].amountTotal) {
+    await updateAirtableRecord(paymentIntentId);
+  }
+}
+
+// Update Airtable record
+async function updateAirtableRecord(paymentIntentId) {
+  const { clientReferenceId, amountTotal } = eventStore[paymentIntentId];
+
+  try {
+    // Fetch the latest three records from Airtable
+    const records = await base2('Payment Records')
+      .select({
+        sort: [{ field: 'Created Time', direction: 'desc' }],
+        maxRecords: 3,
+      })
+      .firstPage();
+
+    // Find the matching record by client reference ID
+    const matchingRecord = records.find(record => record.id === clientReferenceId);
+
+    if (matchingRecord) {
+      // Update Airtable record
+      await base2('Payment Records').update(matchingRecord.id, {
+        'Payment ID': paymentIntentId,
+        'Amount Total': formatCurrency(amountTotal),
+        'Payment Status': 'Paid',
+      });
+      console.log(`Airtable record (${clientReferenceId}) updated successfully.`);
+    } else {
+      console.log(`No matching Airtable record found for clientReferenceId: ${clientReferenceId}`);
+    }
+  } catch (error) {
+    console.error('Error updating Airtable record:', error);
+  } finally {
+    // Clean up the event store
+    delete eventStore[paymentIntentId];
+  }
+}
+
+// Helper function to format currency
+function formatCurrency(amount) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount / 100);
+}
 
 
 
