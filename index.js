@@ -820,38 +820,42 @@ app.post('/register-class', async (req, res) => {
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
+app.use(
+  '/webhook',
+  bodyParser.raw({ type: 'application/json' })
+);
 
-// Webhook handler route
-const endpointSecret = 'whsec_pDkMNclVLuXKryZIzSlapz3D5IcK74sb'; // Replace with your webhook secret
+const endpointSecret = 'whsec_pDkMNclVLuXKryZIzSlapz3D5IcK74sb';
 
-app.post('/webhook', function(request, response) {
+app.post('/webhook', (request, response) => {
   const sig = request.headers['stripe-signature'];
-  const body = request.body;
-
-  let event = null;
+  let event;
 
   try {
     event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
   } catch (err) {
-    // invalid signature
-    response.status(400).end();
+    console.error('⚠️ Webhook signature verification failed.', err.message);
+    response.status(400).send(`Webhook Error: ${err.message}`);
     return;
   }
 
-  let intent = null;
-  switch (event['type']) {
+  switch (event.type) {
     case 'payment_intent.succeeded':
-      intent = event.data.object;
-      console.log("Succeeded:", intent.id);
+      const paymentIntent = event.data.object;
+      console.log('PaymentIntent was successful!', paymentIntent.id);
       break;
+
     case 'payment_intent.payment_failed':
-      intent = event.data.object;
-      const message = intent.last_payment_error && intent.last_payment_error.message;
-      console.log('Failed:', intent.id, message);
+      const failedIntent = event.data.object;
+      const message = failedIntent.last_payment_error?.message;
+      console.error('PaymentIntent failed:', failedIntent.id, message);
       break;
+
+    default:
+      console.log(`Unhandled event type ${event.type}`);
   }
 
-  response.sendStatus(200);
+  response.status(200).send('Received');
 });
 
 // Function to handle successful payments
