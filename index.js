@@ -819,19 +819,19 @@ app.post('/register-class', async (req, res) => {
 });
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
-
 app.use(
   '/webhook',
-  bodyParser.raw({ type: 'application/json' })
+  bodyParser.raw({ type: 'application/json' }) // Ensures the body is passed as raw
 );
 
-const endpointSecret = 'whsec_pDkMNclVLuXKryZIzSlapz3D5IcK74sb';
+const endpointSecret = 'whsec_324b64d18168cbc5053753d722f4c1bb42ee8bda7409a34008fcfdb4a906a33c'; // Replace with your signing secret
 
 app.post('/webhook', (request, response) => {
   const sig = request.headers['stripe-signature'];
   let event;
 
   try {
+    // Use the raw body for signature verification
     event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
   } catch (err) {
     console.error('⚠️ Webhook signature verification failed.', err.message);
@@ -839,6 +839,7 @@ app.post('/webhook', (request, response) => {
     return;
   }
 
+  // Handle event types
   switch (event.type) {
     case 'payment_intent.succeeded':
       const paymentIntent = event.data.object;
@@ -857,6 +858,7 @@ app.post('/webhook', (request, response) => {
 
   response.status(200).send('Received');
 });
+
 
 // Function to handle successful payments
 // async function handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal) {
