@@ -21,11 +21,7 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
-// Temporary storage for event data
-
-const eventStore = {};
-
-// Webhook handler
+// stripe Webhook handler
 app.post('/webhook', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const rawBody = req.body;
@@ -77,7 +73,7 @@ app.post('/webhook', async (req, res) => {
       }
 
       // Proceed to update class and field data
-      const lastRecord = matchingRecord; // Assuming the last fetched record
+      const lastRecord = matchingRecord; 
       const seatCount = parseInt(lastRecord.fields['Number of seat Purchased'], 10);
       const classFieldValue = lastRecord.fields['Airtable id'];
       const multipleClassRegistrationIds = lastRecord.fields['Multiple Class Registration'] || [];
