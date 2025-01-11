@@ -23,7 +23,6 @@ app.use('/webhook', express.raw({ type: 'application/json' }));
 
 // Temporary storage for event data
 
-const eventStore = {};
 
 // Webhook handler
 app.post('/webhook', async (req, res) => {
@@ -38,97 +37,53 @@ app.post('/webhook', async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      await handlePaymentIntentSucceeded(event.data.object);
-      break;
+  // Handle checkout.session.completed event
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object;
 
-    case 'checkout.session.completed':
-      await handleCheckoutSessionCompleted(event.data.object);
-      break;
+    const clientReferenceId = session.client_reference_id;
+    const paymentIntentId = session.payment_intent;
+    const amountTotal = session.amount_total;
 
-    default:
-      console.log(`Unhandled event type ${event.type}`);
+    console.log(`Processing checkout session for PaymentIntent: ${paymentIntentId}`);
+
+    if (!clientReferenceId || !paymentIntentId) {
+      console.warn('Missing client_reference_id or payment_intent in session');
+      return res.status(400).send('Invalid session data');
+    }
+
+    try {
+      // Fetch the latest three records from Airtable
+      const records = await base2('Payment Records')
+        .select({
+          sort: [{ field: 'Created Time', direction: 'desc' }],
+          maxRecords: 3,
+        })
+        .firstPage();
+
+      // Find the matching record by client reference ID
+      const matchingRecord = records.find(record => record.id === clientReferenceId);
+
+      if (matchingRecord) {
+        // Update Airtable record
+        await base2('Payment Records').update(matchingRecord.id, {
+          'Payment ID': paymentIntentId,
+          'Amount Total': formatCurrency(amountTotal),
+          'Payment Status': 'Paid',
+        });
+        console.log(`Airtable record (${clientReferenceId}) updated successfully.`);
+      } else {
+        console.log(`No matching Airtable record found for clientReferenceId: ${clientReferenceId}`);
+      }
+    } catch (error) {
+      console.error('Error updating Airtable record:', error);
+    }
+  } else {
+    console.log(`Unhandled event type: ${event.type}`);
   }
 
   res.status(200).send('Received');
 });
-
-// Handle payment_intent.succeeded
-async function handlePaymentIntentSucceeded(paymentIntent) {
-  const { id: paymentIntentId, amount: amountTotal } = paymentIntent;
-
-  // Store payment intent details
-  if (!eventStore[paymentIntentId]) {
-    eventStore[paymentIntentId] = {};
-  }
-  eventStore[paymentIntentId].amountTotal = amountTotal;
-
-  console.log(`Stored payment intent details for PaymentIntent: ${paymentIntentId}`);
-
-  // Check if client_reference_id is already available
-  if (eventStore[paymentIntentId].clientReferenceId) {
-    await updateAirtableRecord(paymentIntentId);
-  }
-}
-
-// Handle checkout.session.completed
-async function handleCheckoutSessionCompleted(session) {
-  const { payment_intent: paymentIntentId, client_reference_id: clientReferenceId } = session;
-
-  if (!paymentIntentId || !clientReferenceId) {
-    console.warn('Missing payment_intent or client_reference_id in session');
-    return;
-  }
-
-  // Store client reference ID
-  if (!eventStore[paymentIntentId]) {
-    eventStore[paymentIntentId] = {};
-  }
-  eventStore[paymentIntentId].clientReferenceId = clientReferenceId;
-
-  console.log(`Stored client reference ID for PaymentIntent: ${paymentIntentId}`);
-
-  // Check if payment intent details are already available
-  if (eventStore[paymentIntentId].amountTotal) {
-    await updateAirtableRecord(paymentIntentId);
-  }
-}
-
-// Update Airtable record
-async function updateAirtableRecord(paymentIntentId) {
-  const { clientReferenceId, amountTotal } = eventStore[paymentIntentId];
-
-  try {
-    // Fetch the latest three records from Airtable
-    const records = await base2('Payment Records')
-      .select({
-        sort: [{ field: 'Created Time', direction: 'desc' }],
-        maxRecords: 3,
-      })
-      .firstPage();
-
-    // Find the matching record by client reference ID
-    const matchingRecord = records.find(record => record.id === clientReferenceId);
-
-    if (matchingRecord) {
-      // Update Airtable record
-      await base2('Payment Records').update(matchingRecord.id, {
-        'Payment ID': paymentIntentId,
-        'Amount Total': formatCurrency(amountTotal),
-        'Payment Status': 'Paid',
-      });
-      console.log(`Airtable record (${clientReferenceId}) updated successfully.`);
-    } else {
-      console.log(`No matching Airtable record found for clientReferenceId: ${clientReferenceId}`);
-    }
-  } catch (error) {
-    console.error('Error updating Airtable record:', error);
-  } finally {
-    // Clean up the event store
-    delete eventStore[paymentIntentId];
-  }
-}
 
 // Helper function to format currency
 function formatCurrency(amount) {
