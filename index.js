@@ -22,7 +22,6 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 app.use('/webhook', express.raw({ type: 'application/json' }));
 
 // Temporary storage for event data
-const eventStore = {};
 
 const eventStore = {};
 
