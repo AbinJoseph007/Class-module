@@ -58,7 +58,7 @@ app.post('/webhook', async (req, res) => {
       const records = await base2('Payment Records')
     .select({
       sort: [{ field: "Created", direction: "desc" }],
-      maxRecords: 1,  // Limit to the first record
+      maxRecords: 2,  // Limit to the first record
     })
     .firstPage();
 
