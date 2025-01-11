@@ -11,10 +11,10 @@ require('dotenv').config();
 const app = express();
 
 Airtable.configure({
-  apiKey: "patIHe0hP6zpwFfqh.f6ec6a072da7f4da9df3f6a1024844d2c4c486e81d2583e40be68ead09f6c868",
+  apiKey: process.env.AIRTABLE_API_KEY,
 });
 
-const base2 = Airtable.base("app8pm9JBk0lffXMW");
+const base2 = Airtable.base(process.env.AIRTABLE_BASE_ID);
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET; 
 
@@ -54,11 +54,10 @@ app.post('/webhook', async (req, res) => {
     }
 
     try {
-      // Fetch the latest three records from Airtable
       const records = await base2('Payment Records')
     .select({
       sort: [{ field: "Created", direction: "desc" }],
-      maxRecords: 2,  // Limit to the first record
+      maxRecords: 2,  
     })
     .firstPage();
 
@@ -908,44 +907,6 @@ app.post('/register-class', async (req, res) => {
 });
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
-
-
-
-// Function to handle successful payments
-// async function handlePaymentSuccess(clientReferenceId, paymentIntentId, amountTotal) {
-//   console.log('🔄 Processing successful payment:', { clientReferenceId, paymentIntentId, amountTotal });
-
-//   try {
-//     // Search Airtable for the matching record
-//     const records = await airtableBase(process.env.AIRTABLE_TABLE_NAME)
-//       .select({
-//         filterByFormula: `{Client Reference ID} = '${clientReferenceId}'`,
-//         maxRecords: 1,
-//       })
-//       .firstPage();
-
-//     if (records.length === 0) {
-//       console.log(`⚠️ No Airtable record found for Client Reference ID: ${clientReferenceId}`);
-//       return;
-//     }
-
-//     const recordId = records[0].id;
-
-//     // Update the Airtable record with payment details
-//     const updatedFields = {
-//       "Payment ID": paymentIntentId,
-//       "Amount Total": new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amountTotal),
-//       "Payment Status": "Paid",
-//     };
-
-//     await airtableBase(process.env.AIRTABLE_TABLE_NAME).update(recordId, updatedFields);
-//     console.log(`✅ Airtable record updated successfully. Record ID: ${recordId}`);
-//   } catch (error) {
-//     console.error('❌ Error updating Airtable record:', error.message);
-//     throw error;  // Re-throw the error to handle it at the webhook level
-//   }
-// }
-
 
 
 
