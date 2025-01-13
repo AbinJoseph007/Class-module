@@ -690,20 +690,42 @@ app.post('/waitlist', async (req, res) => {
 });
 
 //class registration form submission
+app.use(bodyParser.json());
+
 app.post('/submit-class', async (req, res) => {
-  const { SignedMemberName, signedmemberemail, timestampField, ...fields } = req.body;
+  const {
+    SignedMemberName,
+    signedmemberemail,
+    timestampField,
+    priceId, 
+    numberOfSeats, 
+    ...fields
+  } = req.body;
 
   try {
+    // Validate inputs
+    if (!priceId || typeof priceId !== 'string' || !numberOfSeats || isNaN(numberOfSeats) || numberOfSeats <= 0) {
+      return res.status(400).send({ message: 'Invalid price ID or seat count.' });
+    }
+
+    // Calculate the total payment dynamically
+    const totalPayment = numberOfSeats * parseFloat(fields.pricePerSeat || 0);
+    if (totalPayment <= 0) {
+      return res.status(400).send({ message: 'Invalid total payment amount.' });
+    }
+
+    // Initialize variables for Airtable records
     const seatRecords = [];
     const seatRecordIds = [];
     const registeredNames = [];
     let seatCount = 0;
+    let biawClassId = null; 
 
     for (let i = 1; i <= 10; i++) {
       const name = fields[`P${i}-Name`];
       const email = fields[`P${i}-Email`];
       const phone = fields[`P${i}-Phone-number`] || fields[`P${i}-Phone-Number`];
-      const airID = fields['airtable-id'];
+      const airID = fields['airtable-id']; 
 
       if (!name && !email && !phone) {
         continue;
@@ -713,21 +735,26 @@ app.post('/submit-class', async (req, res) => {
         seatCount++;
       }
 
-      const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
-        .select({
-          filterByFormula: `{Field ID} = '${airID}'`,
-          maxRecords: 1,
-        })
-        .firstPage();
+      // Fetch class from Airtable using the `airID` (only fetch once)
+      if (!biawClassId) {
+        const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+          .select({
+            filterByFormula: `{Field ID} = '${airID}'`,
+            maxRecords: 1,
+          })
+          .firstPage();
 
-      if (biawClassesTables.length === 0) {
-        console.error("No matching record found in Biaw Classes table");
-        return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+        if (biawClassesTables.length === 0) {
+          console.error("No matching record found in Biaw Classes table");
+          return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+        }
+
+        const biawClassRecord = biawClassesTables[0];
+        biawClassId = biawClassRecord.id;
+        console.log('Fetched Biaw Class ID:', biawClassId); 
       }
 
-      const biawClassRecords = biawClassesTables[0];
-      const biawClassIds = biawClassRecords.id;
-
+      // Create seat record
       const seatRecord = {
         "Name": name || "",
         "Email": email || "",
@@ -735,12 +762,13 @@ app.post('/submit-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Payment Status": "Pending",
-        "Biaw Classes": [biawClassIds],
+        "Biaw Classes": [biawClassId], 
       };
 
       seatRecords.push(seatRecord);
     }
 
+    // Create seat records in Airtable
     const createdRecords = [];
     for (const record of seatRecords) {
       const createdRecord = await airtable
@@ -748,25 +776,11 @@ app.post('/submit-class', async (req, res) => {
         .create(record);
 
       createdRecords.push(createdRecord);
-      seatRecordIds.push(createdRecord.id);
+      seatRecordIds.push(createdRecord.id); 
       registeredNames.push(record["Name"]);
     }
 
-    const biawClassesTable = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
-      .select({
-        filterByFormula: `{Field ID} = '${fields['airtable-id']}'`,
-        maxRecords: 1,
-      })
-      .firstPage();
-
-    if (biawClassesTable.length === 0) {
-      console.error("No matching record found in Biaw Classes table");
-      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
-    }
-
-    const biawClassRecord = biawClassesTable[0];
-    const biawClassId = biawClassRecord.id;
-
+    // Create payment record in Airtable
     const paymentRecord = {
       "Name": SignedMemberName,
       "Email": signedmemberemail,
@@ -774,10 +788,9 @@ app.post('/submit-class', async (req, res) => {
       "Airtable id": fields['airtable-id'],
       "Client name": SignedMemberName,
       "Payment Status": "Pending",
-      "Biaw Classes": [fields['airtable-id']],
+      "Biaw Classes": [biawClassId], 
       "Multiple Class Registration": seatRecordIds,
       "Number of seat Purchased": seatCount,
-      "Biaw Classes": [biawClassId],
       "Booking Type": "User booked",
       "ROII member": "No",
       "Purchased Class url": fields['class-url']
@@ -788,19 +801,47 @@ app.post('/submit-class', async (req, res) => {
       paymentCreatedRecord = await airtable
         .base(AIRTABLE_BASE_ID)("Payment Records")
         .create(paymentRecord);
+
+      console.log('Payment record created:', paymentCreatedRecord); 
     } catch (paymentError) {
       console.error("Error adding to Payment Records:", paymentError);
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
     }
 
+    // Create Stripe Checkout session
+    const session = await stripe.checkout.sessions.create({
+      line_items: [
+        {
+          price: priceId,
+          quantity: numberOfSeats,
+        },
+      ],
+      mode: 'payment',
+      allow_promotion_codes: true, 
+      success_url: 'https://biaw-stage-api.webflow.io/thank-you',
+      cancel_url: 'https://biaw-stage-api.webflow.io/payment-declined',
+      client_reference_id: paymentCreatedRecord.id, 
+      metadata: {
+        signedmemberemail,
+        SignedMemberName,
+        seatCount,
+        totalPayment,
+      },
+    });
+
+    // Respond with the Stripe Checkout URL
     res.status(200).send({
-      message: "Class registered successfully",
-      records: createdRecords,
+      message: 'Class registered successfully',
+      records: seatRecords,
       paymentRecord: paymentCreatedRecord,
+      checkoutUrl: session.url, 
     });
   } catch (error) {
-    console.error("Error adding records to Airtable:", error);
-    res.status(500).send({ message: "Error registering class", error: error });
+    console.error('Error:', error);
+    res.status(500).send({
+      message: 'Error registering class',
+      error: error.message,
+    });
   }
 });
 
