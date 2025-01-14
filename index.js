@@ -5,6 +5,7 @@ const cors = require("cors");
 const axios = require('axios');
 const cron = require('node-cron');
 const bodyParser = require('body-parser');
+const nodemailer = require("nodemailer");
 
 require('dotenv').config();
 
@@ -13,6 +14,15 @@ const app = express();
 Airtable.configure({
   apiKey: process.env.AIRTABLE_API_KEY,
 });
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD,
+  },
+});
+
 
 const base2 = Airtable.base(process.env.AIRTABLE_BASE_ID);
 
@@ -40,7 +50,7 @@ app.post('/webhook', async (req, res) => {
     const clientReferenceId = session.client_reference_id;
     const paymentIntentId = session.payment_intent;
     const amountTotal = session.amount_total;
-    const checkid = session.id
+    const checkid = session.id;
 
     console.log(`Processing checkout session for PaymentIntent: ${paymentIntentId}`);
 
@@ -67,7 +77,7 @@ app.post('/webhook', async (req, res) => {
           'Payment ID': paymentIntentId,
           'Amount Total': formatCurrency(amountTotal),
           'Payment Status': 'Paid',
-          "Payment record id":checkid,
+          'Payment record id': checkid,
         });
         console.log(`Payment record (${clientReferenceId}) updated successfully.`);
       } else {
@@ -79,6 +89,9 @@ app.post('/webhook', async (req, res) => {
       const seatCount = parseInt(lastRecord.fields['Number of seat Purchased'], 10);
       const classFieldValue = lastRecord.fields['Airtable id'];
       const multipleClassRegistrationIds = lastRecord.fields['Multiple Class Registration'] || [];
+      const userEmail = lastRecord.fields['Email'];
+      const userName = lastRecord.fields['Name'];
+      const purchasedClassUrl = lastRecord.fields['Purchased Class url'];
 
       const classRecords = await base2('Biaw Classes')
         .select({
@@ -125,6 +138,40 @@ app.post('/webhook', async (req, res) => {
           console.error(`Failed to update record ID ${multipleClassId}:`, error.message);
         }
       }
+
+      // Send confirmation email
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: userEmail,
+        subject: 'Class Registration Confirmation',
+        html: `
+          <h1>Thank you for registering!</h1>
+          <p>Hi ${userName},</p>
+          <p>Your registration for the class has been confirmed. Below are your details:</p>
+          <ul>
+            <li>Class URL: <a href="${purchasedClassUrl}">${purchasedClassUrl}</a></li>
+            <li>Number of Seats Purchased: ${seatCount}</li>
+            <li>Total Amount Paid: ${formatCurrency(amountTotal)}</li>
+          </ul>
+          <p>We look forward to seeing you in class!</p>
+        `,
+      };
+
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.error('Failed to send email:', error.message);
+        } else {
+          console.log(`Email sent to ${userEmail}: ${info.response}`);
+        }
+      });
     } catch (error) {
       console.error('Error processing the webhook event:', error);
     }
@@ -134,6 +181,7 @@ app.post('/webhook', async (req, res) => {
 
   res.status(200).send('Received');
 });
+
 
 
 // Helper function to format currency
