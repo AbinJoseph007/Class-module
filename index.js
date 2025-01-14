@@ -40,6 +40,7 @@ app.post('/webhook', async (req, res) => {
     const clientReferenceId = session.client_reference_id;
     const paymentIntentId = session.payment_intent;
     const amountTotal = session.amount_total;
+    const checkid = session.id
 
     console.log(`Processing checkout session for PaymentIntent: ${paymentIntentId}`);
 
@@ -66,6 +67,7 @@ app.post('/webhook', async (req, res) => {
           'Payment ID': paymentIntentId,
           'Amount Total': formatCurrency(amountTotal),
           'Payment Status': 'Paid',
+          "Payment record id":checkid,
         });
         console.log(`Payment record (${clientReferenceId}) updated successfully.`);
       } else {
