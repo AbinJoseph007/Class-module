@@ -168,6 +168,7 @@ app.post('/webhook', async (req, res) => {
           <li>Location : ${paltform}</li>
         </ul>
         <p>We look forward to seeing you in class!</p>
+        <p>Best regards,<br>BIAW Customer Support Team</p>
       `,
       };
 
@@ -701,7 +702,7 @@ periodicUniqueClassSync(30 * 1000);
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 
 app.post('/waitlist', async (req, res) => {
-  const { loginDetails, classId, loginMember, className, instructor ,classur } = req.body;
+  const { loginDetails, classId, loginMember, className, instructor, classur } = req.body;
 
   // Validation
   if (!loginDetails || !classId || !loginMember || !className || !instructor) {
@@ -732,19 +733,81 @@ app.post('/waitlist', async (req, res) => {
           'Client ID': loginMember,
           'Class Name': className,
           'Instructor': instructor,
-          'Class Airtable ID':classId,
+          'Class Airtable ID': classId,
           'Class Airtables ID': [classRecordId], // Link to the related class
-          'Class URL':classur,
+          'Class URL': classur,
         },
       },
     ]);
 
-    res.status(201).json({ message: 'Record created successfully.', record: newRecord });
+    // Step 3: Send email notification to the user
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER, // Your email address
+        pass: process.env.EMAIL_PASSWORD, // Your email app password
+      },
+    });
+
+    const userMailOptions = {
+      from: `"BIAW Support" <${process.env.EMAIL_USER}>`, // Sender's email address
+      to: loginDetails, // Recipient's email address
+      subject: 'You are on the Waitlist for the Class',
+      text: `Hi there,
+
+We saw that you are interested in the class "${className}" by ${instructor}. We have added you to the waitlist and will inform you as soon as a seat becomes available.
+
+Thank you for your patience!
+
+Best regards,
+The Team`,
+    };
+
+    const adminMailOptions = {
+      from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+      to: "abinjosephonline.in@gmail.com", // Admin email address
+      subject: 'New Waitlist Entry Notification',
+      text: `Hello Admin,
+
+A new person has been added to the waitlist for the class:
+
+Class Name: ${className}
+Instructor: ${instructor}
+User Email: ${loginDetails}
+Class ID: ${classId}
+Class URL: ${classur}
+
+Please review the details and proceed as necessary.
+
+Best regards,
+The System`,
+    };
+
+    transporter.sendMail(userMailOptions, (error, info) => {
+      if (error) {
+        console.error('Error sending email to user:', error);
+        return res.status(500).json({ message: 'Record created, but user email notification failed.', error: error.message });
+      } else {
+        console.log('User email sent:', info.response);
+
+        // Send email notification to admin
+        transporter.sendMail(adminMailOptions, (adminError, adminInfo) => {
+          if (adminError) {
+            console.error('Error sending email to admin:', adminError);
+            return res.status(500).json({ message: 'Record created, but admin email notification failed.', error: adminError.message });
+          } else {
+            console.log('Admin email sent:', adminInfo.response);
+            return res.status(201).json({ message: 'Record created and emails sent successfully.', record: newRecord });
+          }
+        });
+      }
+    });
   } catch (err) {
     console.error('Error saving to Airtable:', err);
     res.status(500).json({ message: 'Error saving to Airtable.', error: err.message });
   }
 });
+
 
 //class registration form submission
 app.use(bodyParser.json());
@@ -1032,6 +1095,36 @@ app.post('/register-class', async (req, res) => {
       paymentCreatedRecord = await airtable
         .base(AIRTABLE_BASE_ID)("Payment Records")
         .create(paymentRecord);
+
+        const transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASSWORD,
+          },
+        });
+    
+        const userMailOptions = {
+          from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+          to: signEmail,
+          subject: `Class Registration Confirmation for ${biawClassRecord.fields['Name']}`,
+          html: `        
+          <p>Hi ${signName},</p>
+           <p>You have successfully registered for the class. Here are the details:</p>
+          <p>Your registration for the class <strong>${biawClassRecord.fields['Name']}</strong> has been confirmed. Below are your details:</p>
+          <p>description : ${biawClassRecord.fields['Description']}</p>
+          <ul>
+            <li>Number of Seats Purchased: ${seatCount}</li>
+            <li>Location : ${biawClassRecord.fields['Location']}</li>
+            <li>Class Url : ${fields["class-url-2"]}</li>
+          </ul>
+          <p>We look forward to seeing you in class!</p>
+          <p>Best regards,<br>BIAW Customer Support Team</p>
+        `,
+        };
+    
+        await transporter.sendMail(userMailOptions);
+
     } catch (paymentError) {
       console.error("Error adding to Payment Records:", paymentError);
       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
@@ -1334,6 +1427,7 @@ processNewClassesPeriodically();
 const stripe3 = require('stripe')('sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8');  // Stripe Secret Key
 
 // POST endpoint to cancel payment and refund
+
 app.post('/cancel-payment', async (req, res) => {
   const { airtableRecordId, paymentIntentId } = req.body;
 
@@ -1348,10 +1442,15 @@ app.post('/cancel-payment', async (req, res) => {
       headers: { Authorization: `Bearer ${AIRTABLE_API_KEY}` },
     });
 
-    const currentPaymentStatus = recordResponse.data.fields["Payment Status"];
-    const seatCount = recordResponse.data.fields["Number of seat Purchased"];
-    const classID = recordResponse.data.fields["Biaw Classes"][0];
-    const multipleClassRegistrationIds = recordResponse.data.fields["Multiple Class Registration"] || []; 
+    const recordData = recordResponse.data.fields;
+    const currentPaymentStatus = recordData["Payment Status"];
+    const seatCount = recordData["Number of seat Purchased"];
+    const classID = recordData["Biaw Classes"][0];
+    const multipleClassRegistrationIds = recordData["Multiple Class Registration"] || [];
+    const userEmail = recordData["Email"];
+    const userName = recordData["Name"];
+    const classurled = recordData['Purchased Class url']
+    const cancellationDate = new Date().toISOString();
 
     // Determine the new payment status
     let newPaymentStatus = "Refunded";
@@ -1385,6 +1484,8 @@ app.post('/cancel-payment', async (req, res) => {
 
     const currentSeatsRemaining = parseInt(biawClassResponse.data.fields["Number of seats remaining"], 10);
     const totalPurchasedSeats = parseInt(biawClassResponse.data.fields["Total Number of Purchased Seats"] || "0", 10);
+    const className = biawClassResponse.data.fields["Name"]; // Fetch the class name
+
 
     // Update seats remaining and total purchased seats
     const updatedSeatsRemaining = currentSeatsRemaining + seatCount;
@@ -1420,21 +1521,76 @@ app.post('/cancel-payment', async (req, res) => {
 
     // Proceed with Stripe Refund only if paymentIntentId is provided
     let refundId = null;
-    if (paymentIntentId) {
+    let refundAmount = null;
+    if (paymentIntentId && newPaymentStatus === "Refunded") {
       const refund = await stripe3.refunds.create({
         payment_intent: paymentIntentId,
       });
 
       console.log("Refund successful:", refund);
       refundId = refund.id;
+      refundAmount = (refund.amount / 100).toFixed(2); 
     }
 
+    // Send email notification
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASSWORD,
+      },
+    });
+
+    let emailSubject = `Class Cancellation Confirmation ${className}`;
+    let emailBody = `
+      <p>Dear ${userName},</p>
+      <p>We’ve received your request to cancel the class, and we’re writing to confirm that the cancellation has been processed successfully.</p>
+      <p>Details of Your Cancellation:</p>
+      <ul>
+        <li>Class: ${className}</li>
+        <li>Class Url: ${classurled}</li>
+        <li>Date of Cancellation: ${cancellationDate}</li>
+    `;
+
+    if (newPaymentStatus === "Refunded") {
+      emailBody += `
+        <li>Refund Amount: ${refundAmount} USD</li>
+      </ul>
+      <p>Please allow 15 business days for the refund to reflect in your account, depending on your payment provider.</p>
+      `;
+    } else {
+      emailBody += `
+      </ul>
+      <p>Your registration has been successfully canceled.</p>
+      `;
+    }
+
+    emailBody += `
+      <p>If you have any questions or need further assistance, feel free to contact us at [Support Email/Phone].</p>
+      <p>Thank you for your understanding, and we hope to see you again soon.</p>
+      <p>Best regards,<br>BIAW Customer Support Team</p>
+    `;
+
+    const mailOptions = {
+      from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+      to: userEmail,
+      subject: emailSubject,
+      html: emailBody,
+    };
+
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error("Failed to send email:", error.message);
+      } else {
+        console.log(`Cancellation email sent to ${userEmail}: ${info.response}`);
+      }
+    });
+
     res.status(200).json({
-      message: "Payment status updated, class seat adjusted, and refund processed.",
+      message: "Payment status updated, class seat adjusted, and email sent.",
       recordId: airtableRecordId,
       refundId: refundId || "No refund needed",
     });
-
   } catch (error) {
     console.error("Error processing the payment cancellation and refund:", error.message);
     res.status(500).json({ message: "Failed to process refund and update records", error: error.message });
