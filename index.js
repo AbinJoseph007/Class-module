@@ -108,6 +108,8 @@ app.post('/webhook', async (req, res) => {
       const classRecord = classRecords[0];
       const currentSeatsRemaining = parseInt(classRecord.fields['Number of seats remaining'], 10);
       const totalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'] || '0', 10);
+      const className = classRecord.fields['Class Name'];
+      const instructorName = classRecord.fields['Instructor Name'];
 
       if (currentSeatsRemaining < seatCount) {
         console.error('Not enough seats available for this class.');
@@ -149,20 +151,20 @@ app.post('/webhook', async (req, res) => {
       });
 
       const mailOptions = {
-        from: process.env.EMAIL_USER,
+        from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
         to: userEmail,
-        subject: 'Class Registration Confirmation',
+        subject: `Class Registration Confirmation for ${className}`,
         html: `
-          <h1>Thank you for registering!</h1>
-          <p>Hi ${userName},</p>
-          <p>Your registration for the class has been confirmed. Below are your details:</p>
-          <ul>
-            <li>Class URL: <a href="${purchasedClassUrl}">${purchasedClassUrl}</a></li>
-            <li>Number of Seats Purchased: ${seatCount}</li>
-            <li>Total Amount Paid: ${formatCurrency(amountTotal)}</li>
-          </ul>
-          <p>We look forward to seeing you in class!</p>
-        `,
+        <h4>Thank you for registering!</h4>
+        <p>Hi ${userName},</p>
+        <p>Your registration for the class <strong>${className}</strong> (instructor: ${instructorName}) has been confirmed. Below are your details:</p>
+        <ul>
+          <li>Class URL: <a href="${purchasedClassUrl}">${purchasedClassUrl}</a></li>
+          <li>Number of Seats Purchased: ${seatCount}</li>
+          <li>Total Amount Paid: ${formatCurrency(amountTotal)}</li>
+        </ul>
+        <p>We look forward to seeing you in class!</p>
+      `,
       };
 
       transporter.sendMail(mailOptions, (error, info) => {
