@@ -647,7 +647,7 @@ periodicUniqueClassSync(30 * 1000);
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
 
 app.post('/waitlist', async (req, res) => {
-  const { loginDetails, classId, loginMember, className, instructor } = req.body;
+  const { loginDetails, classId, loginMember, className, instructor ,classur } = req.body;
 
   // Validation
   if (!loginDetails || !classId || !loginMember || !className || !instructor) {
@@ -680,6 +680,7 @@ app.post('/waitlist', async (req, res) => {
           'Instructor': instructor,
           'Class Airtable ID':classId,
           'Class Airtables ID': [classRecordId], // Link to the related class
+          'Class URL':classur,
         },
       },
     ]);
