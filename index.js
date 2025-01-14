@@ -157,8 +157,8 @@ app.post('/webhook', async (req, res) => {
         to: userEmail,
         subject: `Class Registration Confirmation for ${className}`,
         html: `
-        <h4>Thank you for registering!</h4>
         <p>Hi ${userName},</p>
+        <h4>Thank you for registering!</h4>
         <p>Your registration for the class <strong>${className}</strong> (instructor: ${instructorName}) has been confirmed. Below are your details:</p>
         <p>description : ${discription}</p>
         <ul>
