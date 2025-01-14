@@ -110,6 +110,8 @@ app.post('/webhook', async (req, res) => {
       const totalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'] || '0', 10);
       const className = classRecord.fields['Name'];
       const instructorName = classRecord.fields['Instructor Name (from Instructors)'];
+      const paltform = classRecord.fields['Location'];
+      const discription = classRecord.fields['Description']
 
       if (currentSeatsRemaining < seatCount) {
         console.error('Not enough seats available for this class.');
@@ -158,10 +160,12 @@ app.post('/webhook', async (req, res) => {
         <h4>Thank you for registering!</h4>
         <p>Hi ${userName},</p>
         <p>Your registration for the class <strong>${className}</strong> (instructor: ${instructorName}) has been confirmed. Below are your details:</p>
+        <p>description : ${discription}</p>
         <ul>
           <li>Class URL: <a href="${purchasedClassUrl}">${purchasedClassUrl}</a></li>
           <li>Number of Seats Purchased: ${seatCount}</li>
           <li>Total Amount Paid: ${formatCurrency(amountTotal)}</li>
+          <li>Location : ${paltform}</li>
         </ul>
         <p>We look forward to seeing you in class!</p>
       `,
