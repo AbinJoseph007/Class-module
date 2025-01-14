@@ -108,8 +108,8 @@ app.post('/webhook', async (req, res) => {
       const classRecord = classRecords[0];
       const currentSeatsRemaining = parseInt(classRecord.fields['Number of seats remaining'], 10);
       const totalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'] || '0', 10);
-      const className = classRecord.fields['Class Name'];
-      const instructorName = classRecord.fields['Instructor Name'];
+      const className = classRecord.fields['Name'];
+      const instructorName = classRecord.fields['Instructor Name (from Instructors)'];
 
       if (currentSeatsRemaining < seatCount) {
         console.error('Not enough seats available for this class.');
