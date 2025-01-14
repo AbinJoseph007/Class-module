@@ -1301,7 +1301,7 @@ app.post('/cancel-payment', async (req, res) => {
 
     // Determine the new payment status
     let newPaymentStatus = "Refunded";
-    if (currentPaymentStatus === "ROII-Free") {
+    if (currentPaymentStatus === "ROII-Free" || currentPaymentStatus === "ROII-Cancelled") {
       newPaymentStatus = "ROII-Cancelled";
     }
 
