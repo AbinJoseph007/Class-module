@@ -1297,11 +1297,11 @@ app.post('/cancel-payment', async (req, res) => {
     const currentPaymentStatus = recordResponse.data.fields["Payment Status"];
     const seatCount = recordResponse.data.fields["Number of seat Purchased"];
     const classID = recordResponse.data.fields["Biaw Classes"][0];
-    const multipleClassRegistrationIds = recordResponse.data.fields["Multiple Class Registration"] || []; // Linked record IDs
+    const multipleClassRegistrationIds = recordResponse.data.fields["Multiple Class Registration"] || []; 
 
     // Determine the new payment status
     let newPaymentStatus = "Refunded";
-    if (currentPaymentStatus === "ROII-Free") {
+    if (currentPaymentStatus === "ROII-Free"|| "ROII-Cancelled") {
       newPaymentStatus = "ROII-Cancelled";
     }
 
