@@ -255,6 +255,15 @@ const parsePrice = (price) => {
   }
 };
 
+function generateRandomCode(length) {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+}
+
 // Fetch new records from Airtable
 async function fetchNewClasses() {
   try {
@@ -270,8 +279,8 @@ async function fetchNewClasses() {
   }
 }
 
-// Create a product and prices in Stripe
-async function createStripeProducts(classDetails) {
+// Create Stripe products and coupon code
+async function createStripeProductsAndCoupon(classDetails) {
   try {
     if (!classDetails.Name || !classDetails["Price - Member"] || !classDetails["Price - Non Member"]) {
       throw new Error("Class details are incomplete");
@@ -279,7 +288,33 @@ async function createStripeProducts(classDetails) {
 
     const memberPriceAmount = parsePrice(classDetails["Price - Member"]);
     const nonMemberPriceAmount = parsePrice(classDetails["Price - Non Member"]);
+    const discountPercentage = parseInt(classDetails["% Discounts"] || "0", 10);
 
+    // Create only one coupon
+    let discountCoupon = null;
+    let promotionCode = null;
+
+    if (!isNaN(discountPercentage) && discountPercentage > 0) {
+      // Create a single coupon
+      discountCoupon = await stripe.coupons.create({
+        percent_off: discountPercentage,
+        duration: 'once',
+        name: `${discountPercentage}% Discount for`,
+      });
+
+      console.log("Coupon created successfully:", discountCoupon);
+
+      // Create a single promotion code
+      const generatedCode = generateRandomCode(8); // Example: kGS4ll45
+      promotionCode = await stripe.promotionCodes.create({
+        coupon: discountCoupon.id,
+        code: generatedCode,
+      });
+
+      console.log("Promotion code created successfully:", promotionCode);
+    }
+
+    // Create only two Stripe products: One for Member and one for Non-Member
     const memberProduct = await stripe.products.create({
       name: `${classDetails.Name} - Member`,
       description: classDetails.Description || "No description provided",
@@ -320,6 +355,9 @@ async function createStripeProducts(classDetails) {
       nonMemberProduct,
       nonMemberPrice,
       nonMemberPaymentLink,
+      discountCoupon,
+      promotionCode,
+      generatedCode2: promotionCode?.code
     };
   } catch (error) {
     console.error("Error processing class:", error.stack || error.message || error);
@@ -327,20 +365,19 @@ async function createStripeProducts(classDetails) {
   }
 }
 
-
 // Clean the slug by removing any non-alphabetic characters and keeping only letters and spaces
 function generateSlug(classDetails, dropdownValue) {
   const cleanedName = classDetails.Name
     .replace(/[^a-zA-Z\s]/g, '')
     .toLowerCase()
-    .replace(/\s+/g, '-')
+    .replace(/\s+/g, '-');
 
   const cleanedDropdownValue = dropdownValue.toLowerCase().replace(/\s+/g, '-');
 
   return `${cleanedName}-${cleanedDropdownValue}`;
 }
 
-// function to add cms class
+// Function to add CMS class to Webflow
 async function addToWebflowCMS(classDetails, stripeInfo) {
   try {
     const instructorName = Array.isArray(classDetails["Instructor Name (from Instructors)"])
@@ -405,7 +442,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "member-non-member": dropdownValue,
             "member": memberValue,
             "non-member": nonMemberValue,
-            "number-of-remaining-seats" : classDetails["Number of seats remaining"],
+            "number-of-remaining-seats": classDetails["Number of seats remaining"],
           },
         },
         {
@@ -547,7 +584,7 @@ runPeriodicallyw(30 * 1000);
 
 
 // Update Airtable record with Stripe Product ID
-async function updateAirtableRecord(recordId, stripeInfo) {
+async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2) {
   try {
     // Validate recordId
     if (!recordId) {
@@ -557,12 +594,15 @@ async function updateAirtableRecord(recordId, stripeInfo) {
     // Log the inputs for debugging
     console.log("Record ID:", recordId);
     console.log("Stripe Info:", stripeInfo);
+    console.log("generated id", generatedCode2);
 
     // Perform the update
     await airtable.base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME).update(recordId, {
       "Item Id": stripeInfo?.product?.id ?? "Unknown Product ID",
       "Member Price ID": String(stripeInfo?.memberPrice?.id ?? "Unknown Member Price ID"),
       "Non-Member Price ID": String(stripeInfo?.nonMemberPrice?.id ?? "Unknown Non-Member Price ID"),
+      "Coupon Code": generatedCode2 ?? "Unknown Coupon Code",
+      "Publish / Unpublish":"Publish"
     });
 
     console.log("Airtable record updated successfully!");
@@ -570,6 +610,7 @@ async function updateAirtableRecord(recordId, stripeInfo) {
     console.error("Error updating Airtable Record:", {
       recordId,
       stripeInfo,
+      generatedCode2,
       error: error.message,
     });
     throw error;
@@ -585,14 +626,14 @@ async function processNewClasses() {
     try {
       console.log(`Processing class: ${classDetails.Name}`); // Log class name
 
-      // Create Stripe product and prices
-      const stripeInfo = await createStripeProducts(classDetails);
+      // Create Stripe product and prices and coupon
+      const stripeInfo = await createStripeProductsAndCoupon(classDetails);
 
       // Add class to Webflow CMS
       await addToWebflowCMS(classDetails, stripeInfo);
 
       // Update Airtable with Stripe Product ID
-      await updateAirtableRecord(classDetails.id, stripeInfo);
+      await updateAirtableRecord(classDetails.id, stripeInfo ,stripeInfo.generatedCode2);
 
       console.log(`Successfully processed class: ${classDetails.Name}`);
     } catch (error) {
@@ -600,7 +641,6 @@ async function processNewClasses() {
     }
   }
 }
-
 
 const UNIQUE_SITE_ID = "670d37b3620fd9656047ce2d";
 const UNIQUE_API_BASE_URL = "https://api.webflow.com/v2";
@@ -1397,31 +1437,29 @@ async function runPeriodicallys(intervalMs) {
 runPeriodicallys(30 * 1000);
 
 
-
-
-//Main function to process new classes periodically
+// Main function to process new classes (periodically)
 async function processNewClassesPeriodically() {
   try {
     console.log("Starting periodic class processing...");
 
-    await processNewClasses();
+    await processNewClasses(); // Run the first time
 
     setInterval(async () => {
       try {
         console.log("Checking for new classes...");
-        await processNewClasses();
+        await processNewClasses(); // Continue checking periodically
         console.log("Periodic check completed.");
       } catch (error) {
         logError("Periodic Class Processing", error);
       }
-    }, 30 * 1000);
+    }, 30 * 1000); // Periodic check every 30 seconds
   } catch (error) {
     logError("Initial Process", error);
   }
 }
 
 // Start the periodic process
-processNewClassesPeriodically();
+processNewClassesPeriodically(); // Only start the periodic process
 
 
 const stripe3 = require('stripe')('sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8');  // Stripe Secret Key
@@ -1596,18 +1634,6 @@ app.post('/cancel-payment', async (req, res) => {
     res.status(500).json({ message: "Failed to process refund and update records", error: error.message });
   }
 });
-
-
-(async () => {
-  try {
-    console.log("Starting class processing...");
-    await processNewClasses();
-    console.log("Class processing completed.");
-  } catch (error) {
-    logError("Main Process", error);
-  }
-})();
-
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
