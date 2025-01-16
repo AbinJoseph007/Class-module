@@ -1635,6 +1635,109 @@ app.post('/cancel-payment', async (req, res) => {
   }
 });
 
+// Initialize Airtable base
+const base4 = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
+
+async function checkAndNotify() {
+  try {
+    const jointWaitlistRecords = await base4('Joint waitlist')
+      .select({
+        filterByFormula: `{Notified} = "Yet to Notify"`, // Only fetch records where Notified is "Yet to Notify"
+      })
+      .all();
+
+    const classDetailsCache = {};
+
+    // Fetch class details and cache them
+    for (const record of jointWaitlistRecords) {
+      const classIds = record.get('Class Airtables ID');
+
+      // Skip records with no Class Airtables ID or empty array
+      if (!classIds || classIds.length === 0) {
+        console.warn(`Record ${record.id} in "Joint waitlist" has no valid "Class Airtables ID".`);
+        continue;
+      }
+
+      const classId = classIds[0]; // Take the first ID from the array
+
+      if (!classDetailsCache[classId]) {
+        try {
+          const classRecord = await base4('Biaw Classes').find(classId);
+          classDetailsCache[classId] = {
+            seatsRemaining: classRecord.get('Number of seats remaining'),
+            className: classRecord.get('Name'), // Optional field for email personalization
+          };
+        } catch (error) {
+          console.error(`Failed to fetch class details for ID ${classId}:`, error.message);
+        }
+      }
+    }
+
+    // Process waitlist and send notifications
+    for (const record of jointWaitlistRecords) {
+      const classIds = record.get('Class Airtables ID');
+
+      if (!classIds || classIds.length === 0) {
+        console.warn(`Skipping record ${record.id}: No valid Class Airtables ID.`);
+        continue;
+      }
+
+      const classId = classIds[0]; // Take the first ID from the array
+      const email = record.get('Mail ID'); // Ensure this field exists in your Airtable
+
+      if (!classDetailsCache[classId]) {
+        console.warn(`Skipping record ${record.id}: Class details not found for ID ${classId}.`);
+        continue;
+      }
+
+      const { seatsRemaining, className } = classDetailsCache[classId];
+
+      if (seatsRemaining > 0) {
+        const message = {
+          from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: `Seats Available for ${className || 'Your Class'}`,
+          text: `Hello ${record.get('Name') || ''}, 
+
+There are ${seatsRemaining} seats now available for ${className || 'the class'}. If you would like to purchase a seat, you can do so now!
+
+If you have any questions or need further assistance, feel free to contact us at [Support Email/Phone].
+
+Thank you for your understanding and patience, and we hope to see you again soon.
+
+Best regards,
+BIAW Customer Support Team`,
+        };
+
+        await transporter.sendMail(message);
+        console.log(`Email sent to ${email} for class: ${className || classId}`);
+
+        // Mark the user as notified in Airtable
+        try {
+          await base4('Joint waitlist').update(record.id, {
+            "Notified" : "Notified", // Update the Notified field
+          });
+          console.log(`Marked record ${record.id} as notified.`);
+        } catch (updateError) {
+          console.error(`Failed to mark record ${record.id} as notified:`, updateError.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error checking or notifying:', error);
+  }
+}
+
+async function runPeriodicallyswe(intervalMs) {
+  console.log("Starting periodic sync...");
+  setInterval(async () => {
+    console.log(`Running sync at ${new Date().toISOString()}`);
+    await checkAndNotify();
+  }, intervalMs);
+}
+
+runPeriodicallyswe(50 * 1000);
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
