@@ -393,6 +393,8 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
+    const itemIds = []; // To store Webflow item IDs
+
     for (const dropdownValue of ["Member", "Non-Member"]) {
       let memberValue = "No";
       let nonMemberValue = "No";
@@ -443,6 +445,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "member": memberValue,
             "non-member": nonMemberValue,
             "number-of-remaining-seats": classDetails["Number of seats remaining"],
+            // "related-classes": relatedClassesIds, // Add related classes
           },
         },
         {
@@ -453,8 +456,11 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
         }
       );
 
+      itemIds.push(response.data.id);
+
       console.log(`Successfully added ${dropdownValue} entry for class: ${classDetails.Name}`);
     }
+    return itemIds; // Return both item IDs
   } catch (error) {
     if (error.response) {
       console.error("Webflow API Error:", error.response.data);
@@ -512,7 +518,11 @@ async function syncRemainingSeats() {
     for (const airtableRecord of airtableRecords) {
       const airtableId = airtableRecord.id;
       const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
-      const numberOfSeats = airtableRecord.fields["Number of seats"]; // Getting the "Number of seats" value
+      const numberOfSeats = airtableRecord.fields["Number of seats"];
+      const nameofclass = airtableRecord.fields["Name"];
+      const roi = airtableRecord["Price - ROII Participants (Select"];
+      const starttime = airtableRecord['Start Time'];
+      const endtime = airtableRecord['End Time']
     
       if (!airtableSeatsRemaining) {
         console.warn(`Airtable record ${airtableId} is missing the "Number of seats remaining" field.`);
@@ -541,7 +551,11 @@ async function syncRemainingSeats() {
             const updateData = {
               fieldData: {
                 "number-of-remaining-seats": String(airtableSeatsRemaining),
-                "number-of-seats": String(numberOfSeats), // Update with the "Number of seats" from Airtable
+                "number-of-seats": String(numberOfSeats),
+                 name : nameofclass,
+                "price-roii-participants":roi,
+                "start-time": starttime,
+                "end-time": endtime,
               },
             };
     
@@ -582,9 +596,8 @@ async function runPeriodicallyw(intervalMs) {
 runPeriodicallyw(30 * 1000);
 
 
-
 // Update Airtable record with Stripe Product ID
-async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2) {
+async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2 ,itemIds) {
   try {
     // Validate recordId
     if (!recordId) {
@@ -595,13 +608,16 @@ async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2) {
     console.log("Record ID:", recordId);
     console.log("Stripe Info:", stripeInfo);
     console.log("generated id", generatedCode2);
+    console.log("item id", itemIds);
+
 
     // Perform the update
     await airtable.base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME).update(recordId, {
-      "Item Id": stripeInfo?.product?.id ?? "Unknown Product ID",
+      "Item Id": itemIds[0] ?? "Unknown Member Price ID", // Member item ID
+      "Item Id 2": itemIds[1] ?? "Unknown Member Price ID", // Non-Member item ID
       "Member Price ID": String(stripeInfo?.memberPrice?.id ?? "Unknown Member Price ID"),
       "Non-Member Price ID": String(stripeInfo?.nonMemberPrice?.id ?? "Unknown Non-Member Price ID"),
-      "Coupon Code": generatedCode2 ?? "Unknown Coupon Code",
+      "Coupon Code": generatedCode2,
       "Publish / Unpublish":"Publish"
     });
 
@@ -612,28 +628,41 @@ async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2) {
       stripeInfo,
       generatedCode2,
       error: error.message,
+      itemIds,
     });
     throw error;
   }
 }
 
 
+let isProcessing = false; // Flag to prevent overlapping executions
+
 // Main function to process new classes
 async function processNewClasses() {
   const newClasses = await fetchNewClasses();
 
-  for (const classDetails of newClasses) {
-    try {
-      console.log(`Processing class: ${classDetails.Name}`); // Log class name
+  // Remove duplicate classes (if applicable)
+  const uniqueClasses = Array.from(new Set(newClasses.map(JSON.stringify))).map(JSON.parse);
+  console.log("Unique Classes:", uniqueClasses);
 
-      // Create Stripe product and prices and coupon
+  for (const classDetails of uniqueClasses) {
+    try {
+      console.log(`Processing class: ${classDetails.Name}`); 
+
+      // Create Stripe product, prices, and coupon
       const stripeInfo = await createStripeProductsAndCoupon(classDetails);
 
-      // Add class to Webflow CMS
-      await addToWebflowCMS(classDetails, stripeInfo);
+      // Add class to Webflow CMS and get item IDs
+      const itemIds = await addToWebflowCMS(classDetails, stripeInfo);
+      console.log("Webflow Item IDs:", itemIds); // Log the item IDs
 
-      // Update Airtable with Stripe Product ID
-      await updateAirtableRecord(classDetails.id, stripeInfo ,stripeInfo.generatedCode2);
+      // Ensure two IDs are returned (one for Member, one for Non-Member)
+      if (!itemIds || itemIds.length !== 2) {
+        throw new Error(`Invalid Webflow item IDs returned: ${itemIds}`);
+      }
+
+      // Update Airtable with Stripe Product ID and Webflow item IDs
+      await updateAirtableRecord(classDetails.id, stripeInfo, stripeInfo.generatedCode2, itemIds);
 
       console.log(`Successfully processed class: ${classDetails.Name}`);
     } catch (error) {
@@ -641,7 +670,6 @@ async function processNewClasses() {
     }
   }
 }
-
 const UNIQUE_SITE_ID = "670d37b3620fd9656047ce2d";
 const UNIQUE_API_BASE_URL = "https://api.webflow.com/v2";
 
@@ -1437,29 +1465,27 @@ async function runPeriodicallys(intervalMs) {
 runPeriodicallys(30 * 1000);
 
 
-// Main function to process new classes (periodically)
+// Periodic processing of new classes
 async function processNewClassesPeriodically() {
+  if (isProcessing) {
+    console.log("Another process is already running. Skipping this cycle.");
+    return;
+  }
+
+  isProcessing = true;
   try {
     console.log("Starting periodic class processing...");
-
-    await processNewClasses(); // Run the first time
-
-    setInterval(async () => {
-      try {
-        console.log("Checking for new classes...");
-        await processNewClasses(); // Continue checking periodically
-        console.log("Periodic check completed.");
-      } catch (error) {
-        logError("Periodic Class Processing", error);
-      }
-    }, 30 * 1000); // Periodic check every 30 seconds
+    await processNewClasses();
+    console.log("Periodic processing completed.");
   } catch (error) {
-    logError("Initial Process", error);
+    logError("Periodic Class Processing", error);
+  } finally {
+    isProcessing = false;
   }
 }
 
-// Start the periodic process
-processNewClassesPeriodically(); // Only start the periodic process
+// Start periodic processing every 30 seconds
+setInterval(processNewClassesPeriodically, 30 * 1000);
 
 
 const stripe3 = require('stripe')('sk_test_51Q9sSHE1AF8nzqTaSsnaie0CWSIWxwBjkjZpStwoFY4RJvrb87nnRnJ3B5vvvaiTJFaSQJdbYX0wZHBqAmY2WI8z00hl0oFOC8');  // Stripe Secret Key

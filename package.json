@@ -19,6 +19,6 @@
     "express": "^4.21.1",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.16",
-    "stripe": "^17.4.0"
+    "stripe": "^17.5.0"
   }
 }
