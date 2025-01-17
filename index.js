@@ -393,13 +393,12 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
-    const relatedClassIds = [
-      ...(classDetails["Item Id (from Related Classes )"] || []),
-      ...(classDetails["Item Id 2 (from Related Classes )"] || []),
-    ];
+    const relatedClassIdsForMember = classDetails["Item Id (from Related Classes )"] || [];
+    const relatedClassIdsForNonMember = classDetails["Item Id 2 (from Related Classes )"] || [];
 
     // Validate the related class IDs against Webflow data
-    const validatedRelatedClassIds = await validateWebflowItemIds(relatedClassIds);
+    const validatedRelatedClassIdsForMember = await validateWebflowItemIds(relatedClassIdsForMember);
+    const validatedRelatedClassIdsForNonMember = await validateWebflowItemIds(relatedClassIdsForNonMember);
 
     const itemIds = []; // To store Webflow item IDs
 
@@ -407,15 +406,20 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
       let memberValue = "No";
       let nonMemberValue = "No";
       let paymentLink = "";
+      let relatedClassIds = [];
 
       if (dropdownValue === "Member") {
         memberValue = "Yes";
         nonMemberValue = "No";
         paymentLink = stripeInfo.memberPaymentLink.url;
+        relatedClassIds = validatedRelatedClassIdsForMember;
+
       } else if (dropdownValue === "Non-Member") {
         memberValue = "No";
         nonMemberValue = "Yes";
         paymentLink = stripeInfo.nonMemberPaymentLink.url;
+        relatedClassIds = validatedRelatedClassIdsForNonMember;
+
       }
       const slug = generateSlug(classDetails, dropdownValue);
 
@@ -453,7 +457,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "member": memberValue,
             "non-member": nonMemberValue,
             "number-of-remaining-seats": classDetails["Number of seats remaining"],
-            "related-classes": validatedRelatedClassIds, 
+            "related-classes": relatedClassIds, 
           },
         },
         {
@@ -549,9 +553,9 @@ async function syncRemainingSeats() {
       const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
       const numberOfSeats = airtableRecord.fields["Number of seats"];
       const nameofclass = airtableRecord.fields["Name"];
-      const roi = airtableRecord["Price - ROII Participants (Select"];
-      const starttime = airtableRecord['Start Time'];
-      const endtime = airtableRecord['End Time']
+      const roi = airtableRecord.fields["Price - ROII Participants (Select)"];
+      const starttime = airtableRecord.fields['Start Time'];
+      const endtime = airtableRecord.fields['End Time']
     
       if (!airtableSeatsRemaining) {
         console.warn(`Airtable record ${airtableId} is missing the "Number of seats remaining" field.`);
