@@ -393,6 +393,14 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
+    const relatedClassIds = [
+      ...(classDetails["Item Id (from Related Classes )"] || []),
+      ...(classDetails["Item Id 2 (from Related Classes )"] || []),
+    ];
+
+    // Validate the related class IDs against Webflow data
+    const validatedRelatedClassIds = await validateWebflowItemIds(relatedClassIds);
+
     const itemIds = []; // To store Webflow item IDs
 
     for (const dropdownValue of ["Member", "Non-Member"]) {
@@ -445,7 +453,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "member": memberValue,
             "non-member": nonMemberValue,
             "number-of-remaining-seats": classDetails["Number of seats remaining"],
-            // "related-classes": relatedClassesIds, // Add related classes
+            "related-classes": validatedRelatedClassIds, 
           },
         },
         {
@@ -467,6 +475,27 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     } else {
       console.error("Unknown Error:", error.message);
     }
+    throw error;
+  }
+}
+
+// Function to validate Webflow item IDs
+async function validateWebflowItemIds(itemIds) {
+  try {
+    const response = await axios.get(`https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`, {
+      headers: {
+        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    const webflowItems = response.data.items; // Webflow items data
+    const webflowItemIds = new Set(webflowItems.map((item) => item.id)); // Create a set of Webflow item IDs
+
+    // Return only IDs that exist in Webflow
+    return itemIds.filter((id) => webflowItemIds.has(id));
+  } catch (error) {
+    console.error("Error validating Webflow item IDs:", error.message);
     throw error;
   }
 }
