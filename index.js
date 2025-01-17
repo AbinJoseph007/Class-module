@@ -554,30 +554,46 @@ async function syncRemainingSeats() {
       const numberOfSeats = airtableRecord.fields["Number of seats"];
       const nameofclass = airtableRecord.fields["Name"];
       const roi = airtableRecord.fields["Price - ROII Participants (Select)"];
-      const starttime = airtableRecord.fields['Start Time'];
-      const endtime = airtableRecord.fields['End Time']
-    
+      const starttime = airtableRecord.fields["Start Time"];
+      const endtime = airtableRecord.fields["End Time"];
+
       if (!airtableSeatsRemaining) {
         console.warn(`Airtable record ${airtableId} is missing the "Number of seats remaining" field.`);
         continue;
       }
-    
+
       const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
-    
+
       if (!webflowRecordsToUpdate || webflowRecordsToUpdate.length === 0) {
         console.log(`No matching Webflow records found for Airtable ID: ${airtableId}`);
         continue;
       }
-    
+
       for (const webflowRecord of webflowRecordsToUpdate) {
         const webflowSeatsRemaining = webflowRecord.fieldData["number-of-remaining-seats"];
-    
-        // Check if there's a difference in seat counts
-        if (String(webflowSeatsRemaining) !== String(airtableSeatsRemaining)) {
+        const webflowNameOfClass = webflowRecord.fieldData["name"];
+        const webflowRoi = webflowRecord.fieldData["price-roii-participants"];
+        const webflowStartTime = webflowRecord.fieldData["start-time"];
+        const webflowEndTime = webflowRecord.fieldData["end-time"];
+
+        // Check for any discrepancies between Airtable and Webflow
+        const hasDifferences =
+          String(webflowSeatsRemaining) !== String(airtableSeatsRemaining) ||
+          String(webflowNameOfClass) !== String(nameofclass) ||
+          String(webflowRoi) !== String(roi) ||
+          String(webflowStartTime) !== String(starttime) ||
+          String(webflowEndTime) !== String(endtime);
+
+        if (hasDifferences) {
           console.log(
-            `Difference detected for record with Airtable ID ${airtableId}: Airtable (${airtableSeatsRemaining}) vs Webflow (${webflowSeatsRemaining})`
+            `Updating record for Airtable ID ${airtableId} due to differences:
+            Seats: Airtable (${airtableSeatsRemaining}) vs Webflow (${webflowSeatsRemaining}),
+            Name: Airtable (${nameofclass}) vs Webflow (${webflowNameOfClass}),
+            ROI: Airtable (${roi}) vs Webflow (${webflowRoi}),
+            Start Time: Airtable (${starttime}) vs Webflow (${webflowStartTime}),
+            End Time: Airtable (${endtime}) vs Webflow (${webflowEndTime})`
           );
-    
+
           // Update Webflow record
           try {
             const updateURL = `${webflowBaseURLs}/${webflowRecord.id}`;
@@ -585,15 +601,15 @@ async function syncRemainingSeats() {
               fieldData: {
                 "number-of-remaining-seats": String(airtableSeatsRemaining),
                 "number-of-seats": String(numberOfSeats),
-                 name : nameofclass,
-                "price-roii-participants":roi,
+                name: nameofclass,
+                "price-roii-participants": roi,
                 "start-time": starttime,
                 "end-time": endtime,
               },
             };
-    
+
             const updateResponse = await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
-            console.log(`Updated fields in Webflow for Airtable ID ${airtableId}:`, updateResponse.data);
+            console.log(`Successfully updated Webflow record for Airtable ID ${airtableId}:`, updateResponse.data);
           } catch (updateError) {
             console.error(
               `Error updating Webflow record for Airtable ID ${airtableId}:`,
@@ -601,11 +617,10 @@ async function syncRemainingSeats() {
             );
           }
         } else {
-          console.log(`No difference for record with Airtable ID ${airtableId} and Webflow record ID ${webflowRecord.id}.`);
+          console.log(`No changes needed for Airtable ID ${airtableId} and Webflow record ID ${webflowRecord.id}.`);
         }
       }
     }
-    
   } catch (airtableError) {
     console.error("Error fetching Airtable data:", airtableError.response?.data || airtableError.message);
   }
