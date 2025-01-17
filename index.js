@@ -1350,7 +1350,8 @@ async function syncAirtableToWebflow() {
           "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
           "purchase-record-airtable-id": airtableRecordId,
           "payment-intent-2": record.fields["Payment ID"],
-          "class-url": record.fields["Purchased Class url"] || ""
+          "class-url": record.fields["Purchased Class url"] || "",
+          "purchase-type-2":record.fields["Booking Type"] || "",
         },
       };
 
