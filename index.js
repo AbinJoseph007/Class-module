@@ -290,29 +290,6 @@ async function createStripeProductsAndCoupon(classDetails) {
     const nonMemberPriceAmount = parsePrice(classDetails["Price - Non Member"]);
     const discountPercentage = parseInt(classDetails["% Discounts"] || "0", 10);
 
-    // Create only one coupon
-    let discountCoupon = null;
-    let promotionCode = null;
-
-    if (!isNaN(discountPercentage) && discountPercentage > 0) {
-      // Create a single coupon
-      discountCoupon = await stripe.coupons.create({
-        percent_off: discountPercentage,
-        duration: 'once',
-        name: `${discountPercentage}% Discount for`,
-      });
-
-      console.log("Coupon created successfully:", discountCoupon);
-
-      // Create a single promotion code
-      const generatedCode = generateRandomCode(8); // Example: kGS4ll45
-      promotionCode = await stripe.promotionCodes.create({
-        coupon: discountCoupon.id,
-        code: generatedCode,
-      });
-
-      console.log("Promotion code created successfully:", promotionCode);
-    }
 
     // Create only two Stripe products: One for Member and one for Non-Member
     const memberProduct = await stripe.products.create({
@@ -336,6 +313,34 @@ async function createStripeProductsAndCoupon(classDetails) {
       currency: 'usd',
       product: nonMemberProduct.id,
     });
+
+
+    let discountCoupon = null;
+    let promotionCode = null;
+
+    if (!isNaN(discountPercentage) && discountPercentage > 0) {
+      // Now that the products exist, create the coupon and set applies_to
+      discountCoupon = await stripe.coupons.create({
+        percent_off: discountPercentage,
+        duration: 'once',
+        name: `${discountPercentage}% Discount for`,
+        applies_to: {
+          products: [memberProduct.id, nonMemberProduct.id],  // Apply to both products
+        },
+      });
+
+      console.log("Coupon created successfully:", discountCoupon);
+
+      // Create a single promotion code
+      const generatedCode = generateRandomCode(8); // Example: kGS4ll45
+      promotionCode = await stripe.promotionCodes.create({
+        coupon: discountCoupon.id,
+        code: generatedCode,
+      });
+
+      console.log("Promotion code created successfully:", promotionCode);
+    }
+
 
     // Enable promo code during payment link creation
     const memberPaymentLink = await stripe.paymentLinks.create({
