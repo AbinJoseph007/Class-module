@@ -265,17 +265,27 @@ function generateRandomCode(length) {
 }
 
 // Fetch new records from Airtable
-// Fetch new records from Airtable
 async function fetchNewClasses() {
   try {
+    // Fetch records where {Publish / Unpublish} = 'Publish'
     const records = await airtable
       .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME)
       .select({ 
         filterByFormula: "{Publish / Unpublish} = 'Publish'" 
       })
       .all();
-    console.log("Fetched new records from Airtable:", records.map((rec) => rec.fields));
-    return records.map((record) => ({ id: record.id, ...record.fields }));
+
+    // Filter records to include only those where {Item Id} has no value
+    const filteredRecords = records.filter(record => !record.fields["Item Id"]);
+
+    // Skip the function if no records meet the criteria
+    if (filteredRecords.length === 0) {
+      console.log("No new records to process.");
+      return [];
+    }
+
+    console.log("Fetched and filtered records from Airtable:", filteredRecords.map((rec) => rec.fields));
+    return filteredRecords.map(record => ({ id: record.id, ...record.fields }));
   } catch (error) {
     logError("Fetching Airtable Records", error);
     return [];
@@ -358,15 +368,7 @@ async function createStripeProductsAndCoupon(classDetails) {
     });
 
     return {
-      memberProduct,
-      memberPrice,
-      memberPaymentLink,
-      nonMemberProduct,
-      nonMemberPrice,
-      nonMemberPaymentLink,
-      discountCoupon,
-      promotionCode,
-      generatedCode2: promotionCode?.code
+      memberProduct,memberPrice,memberPaymentLink,nonMemberProduct,nonMemberPrice,nonMemberPaymentLink, discountCoupon,promotionCode,   generatedCode2: promotionCode?.code
     };
   } catch (error) {
     console.error("Error processing class:", error.stack || error.message || error);
@@ -434,7 +436,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
 
       // Prepare API request to Webflow
       const response = await axios.post(
-        `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`,
+        `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items/live`,
         {
           fieldData: {
             name: classDetails.Name,
@@ -565,6 +567,9 @@ async function syncRemainingSeats() {
       const roi = airtableRecord.fields["Price - ROII Participants (Select)"];
       const starttime = airtableRecord.fields["Start Time"];
       const endtime = airtableRecord.fields["End Time"];
+      const location = airtableRecord.fields["Location"];
+      const Description = airtableRecord.fields["Description"];
+      const publish = airtableRecord.fields["Publish / Unpublish"]
 
       if (!airtableSeatsRemaining) {
         console.warn(`Airtable record ${airtableId} is missing the "Number of seats remaining" field.`);
@@ -584,6 +589,8 @@ async function syncRemainingSeats() {
         const webflowRoi = webflowRecord.fieldData["price-roii-participants"];
         const webflowStartTime = webflowRecord.fieldData["start-time"];
         const webflowEndTime = webflowRecord.fieldData["end-time"];
+        const webflowLocation = webflowRecord.fieldData["location"];
+        const webflowdiscription = webflowRecord.fieldData["description"]
 
         // Check for any discrepancies between Airtable and Webflow
         const hasDifferences =
@@ -591,21 +598,14 @@ async function syncRemainingSeats() {
           String(webflowNameOfClass) !== String(nameofclass) ||
           String(webflowRoi) !== String(roi) ||
           String(webflowStartTime) !== String(starttime) ||
-          String(webflowEndTime) !== String(endtime);
+          String(webflowEndTime) !== String(endtime) ||
+          String(webflowLocation) !== String(location) || 
+          String(webflowdiscription) !== String(Description) ;
 
         if (hasDifferences) {
-          console.log(
-            `Updating record for Airtable ID ${airtableId} due to differences:
-            Seats: Airtable (${airtableSeatsRemaining}) vs Webflow (${webflowSeatsRemaining}),
-            Name: Airtable (${nameofclass}) vs Webflow (${webflowNameOfClass}),
-            ROI: Airtable (${roi}) vs Webflow (${webflowRoi}),
-            Start Time: Airtable (${starttime}) vs Webflow (${webflowStartTime}),
-            End Time: Airtable (${endtime}) vs Webflow (${webflowEndTime})`
-          );
-
           // Update Webflow record
           try {
-            const updateURL = `${webflowBaseURLs}/${webflowRecord.id}`;
+            const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
             const updateData = {
               fieldData: {
                 "number-of-remaining-seats": String(airtableSeatsRemaining),
@@ -614,6 +614,8 @@ async function syncRemainingSeats() {
                 "price-roii-participants": roi,
                 "start-time": starttime,
                 "end-time": endtime,
+                "location":location,
+                "description":Description
               },
             };
 
@@ -638,9 +640,6 @@ async function syncRemainingSeats() {
 // Run the sync function
 syncRemainingSeats();
 
-// Run the sync function
-
-
 
 async function runPeriodicallyw(intervalMs) {
   console.log("Starting periodic sync...");
@@ -661,13 +660,6 @@ async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2 ,itemId
       throw new Error("Invalid recordId: recordId is undefined or empty.");
     }
 
-    // Log the inputs for debugging
-    console.log("Record ID:", recordId);
-    console.log("Stripe Info:", stripeInfo);
-    console.log("generated id", generatedCode2);
-    console.log("item id", itemIds);
-
-
     // Perform the update
     await airtable.base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME).update(recordId, {
       "Item Id": itemIds[0] ?? "Unknown Member Price ID", // Member item ID
@@ -675,7 +667,7 @@ async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2 ,itemId
       "Member Price ID": String(stripeInfo?.memberPrice?.id ?? "Unknown Member Price ID"),
       "Non-Member Price ID": String(stripeInfo?.nonMemberPrice?.id ?? "Unknown Non-Member Price ID"),
       "Coupon Code": generatedCode2,
-      "Publish / Unpublish":"Update"
+      "Publish / Unpublish":"Published"
     });
 
     console.log("Airtable record updated successfully!");
@@ -727,100 +719,175 @@ async function processNewClasses() {
     }
   }
 }
-const UNIQUE_SITE_ID = "670d37b3620fd9656047ce2d";
-const UNIQUE_API_BASE_URL = "https://api.webflow.com/v2";
 
-// Publish staged items of "Classes"
-async function publishUniqueClasses() {
+async function deleteWebflowItemsForDeletedAirtableRecords() {
   try {
-    // Fetch all collections for the site
-    const uniqueCollectionsResponse = await axios.get(`${UNIQUE_API_BASE_URL}/sites/${UNIQUE_SITE_ID}/collections`, {
-      headers: {
-        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-        "Accept-Version": "1.0.0",
-      },
-    });
-
-    const uniqueCollections = uniqueCollectionsResponse.data.collections || [];
-    if (!uniqueCollections.length) {
-      console.log("No collections available for this site.");
-      return;
-    }
-
-    console.log(
-      "Discovered Collections:",
-      uniqueCollections.map((collection) => ({
-        uniqueId: collection.id,
-        uniqueName: collection.displayName,
-        uniqueSlug: collection.slug,
-      }))
+    // Fetch Airtable records marked for deletion
+    const airtableRecords = (await axios.get(airtableBaseURLs, { headers: airtableHeaderss })).data.records.filter(
+      (record) => record.fields["Publish / Unpublish"] === "Delete"
     );
 
-    const classesCollection = uniqueCollections.find(
-      (collection) => collection.displayName === "Classes"
-    );
+    if (!airtableRecords.length) return console.log("No Airtable records marked for deletion.");
 
-    if (!classesCollection) {
-      console.log("The 'Classes' collection was not found. Please verify the collection name.");
-      return;
-    }
+    // Fetch Webflow records
+    const webflowRecords = (await axios.get(webflowBaseURLs, { headers: webflowHeaderss })).data.items || [];
 
-    const UNIQUE_CLASSES_COLLECTION_ID = classesCollection.id;
-    console.log(`Identified Classes Collection ID: ${UNIQUE_CLASSES_COLLECTION_ID}`);
+    // Find and delete matching Webflow records
+    for (const airtableRecord of airtableRecords) {
+      const matchingWebflowRecords = webflowRecords.filter(
+        (webflowRecord) => webflowRecord.fieldData["airtablerecordid"] === airtableRecord.id
+      );
 
-    // Fetch items within the 'Classes' collection
-    const uniqueItemsResponse = await axios.get(`${UNIQUE_API_BASE_URL}/collections/${UNIQUE_CLASSES_COLLECTION_ID}/items`, {
-      headers: {
-        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-        "Accept-Version": "1.0.0",
-      },
-    });
+      let allDeleted = true;
 
-    const classItems = uniqueItemsResponse.data.items || [];
+      for (const webflowRecord of matchingWebflowRecords) {
+        try {
+          const response = await fetch(
+            `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items/${webflowRecord.id}/live`,
+            { method: 'DELETE', headers: { Authorization: `Bearer ${WEBFLOW_API_KEY}` } }
+          );
 
-    // Identify items that need publishing
-    const uniqueClassItemIds = classItems
-      .filter((item) => {
-        return item.lastPublished === null || new Date(item.lastUpdated) > new Date(item.lastPublished);
-      })
-      .map((item) => item.id);
-
-    if (!uniqueClassItemIds.length) {
-      console.log("No unpublished or updated items found in the 'Classes' collection.");
-      return;
-    }
-
-    console.log(`Items eligible for publishing: ${uniqueClassItemIds}`);
-
-    // Publish the items
-    const uniquePublishResponse = await axios.post(
-      `${UNIQUE_API_BASE_URL}/collections/${UNIQUE_CLASSES_COLLECTION_ID}/items/publish`,
-      { itemIds: uniqueClassItemIds },
-      {
-        headers: {
-          Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+          if (response.ok) {
+            console.log(`Deleted Webflow record: ${webflowRecord.id}`);
+          } else {
+            console.error(`Failed to delete Webflow record: ${webflowRecord.id}`, await response.json());
+            allDeleted = false;
+          }
+        } catch (error) {
+          console.error(`Error deleting Webflow record: ${webflowRecord.id}`, error);
+          allDeleted = false;
+        }
       }
-    );
 
-    console.log("Publishing Response for 'Classes':", uniquePublishResponse.data);
+      // Update Airtable record if all associated Webflow records were deleted
+      if (allDeleted) {
+        try {
+          const airtableUpdateURL = `${airtableBaseURLs}/${airtableRecord.id}`;
+          const updateData = {
+            fields: { "Publish / Unpublish": "Deleted" },
+          };
+
+          const updateResponse = await axios.patch(airtableUpdateURL, updateData, { headers: airtableHeaderss });
+          console.log(`Updated Airtable record ${airtableRecord.id} to "Update".`);
+        } catch (updateError) {
+          console.error(`Error updating Airtable record ${airtableRecord.id}:`, updateError.response?.data || updateError.message);
+        }
+      }
+    }
   } catch (error) {
-    console.error("An error occurred while publishing 'Classes' items:", error.response?.data || error.message);
+    console.error("Error during deletion operation:", error.message);
   }
 }
 
-// Periodic runner for "Classes"
+// Run the function
+deleteWebflowItemsForDeletedAirtableRecords();
+
+
 async function periodicUniqueClassSync(intervalMs) {
   console.log("Starting unique class sync process...");
   setInterval(async () => {
     console.log(`Executing sync for 'Classes' at ${new Date().toISOString()}`);
-    await publishUniqueClasses();
+    await deleteWebflowItemsForDeletedAirtableRecords();
   }, intervalMs);
 }
 
-// Run periodic sync for "Classes" every 30 seconds
 periodicUniqueClassSync(30 * 1000);
+
+
+const UNIQUE_SITE_ID = "670d37b3620fd9656047ce2d";
+const UNIQUE_API_BASE_URL = "https://api.webflow.com/v2";
+
+// // Publish staged items of "Classes"
+// async function publishUniqueClasses() {
+//   try {
+//     // Fetch all collections for the site
+//     const uniqueCollectionsResponse = await axios.get(`${UNIQUE_API_BASE_URL}/sites/${UNIQUE_SITE_ID}/collections`, {
+//       headers: {
+//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//         "Accept-Version": "1.0.0",
+//       },
+//     });
+
+//     const uniqueCollections = uniqueCollectionsResponse.data.collections || [];
+//     if (!uniqueCollections.length) {
+//       console.log("No collections available for this site.");
+//       return;
+//     }
+
+//     console.log(
+//       "Discovered Collections:",
+//       uniqueCollections.map((collection) => ({
+//         uniqueId: collection.id,
+//         uniqueName: collection.displayName,
+//         uniqueSlug: collection.slug,
+//       }))
+//     );
+
+//     const classesCollection = uniqueCollections.find(
+//       (collection) => collection.displayName === "Classes"
+//     );
+
+//     if (!classesCollection) {
+//       console.log("The 'Classes' collection was not found. Please verify the collection name.");
+//       return;
+//     }
+
+//     const UNIQUE_CLASSES_COLLECTION_ID = classesCollection.id;
+//     console.log(`Identified Classes Collection ID: ${UNIQUE_CLASSES_COLLECTION_ID}`);
+
+//     // Fetch items within the 'Classes' collection
+//     const uniqueItemsResponse = await axios.get(`${UNIQUE_API_BASE_URL}/collections/${UNIQUE_CLASSES_COLLECTION_ID}/items`, {
+//       headers: {
+//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//         "Accept-Version": "1.0.0",
+//       },
+//     });
+
+//     const classItems = uniqueItemsResponse.data.items || [];
+
+//     // Identify items that need publishing
+//     const uniqueClassItemIds = classItems
+//       .filter((item) => {
+//         return item.lastPublished === null || new Date(item.lastUpdated) > new Date(item.lastPublished);
+//       })
+//       .map((item) => item.id);
+
+//     if (!uniqueClassItemIds.length) {
+//       console.log("No unpublished or updated items found in the 'Classes' collection.");
+//       return;
+//     }
+
+//     console.log(`Items eligible for publishing: ${uniqueClassItemIds}`);
+
+//     // Publish the items
+//     const uniquePublishResponse = await axios.post(
+//       `${UNIQUE_API_BASE_URL}/collections/${UNIQUE_CLASSES_COLLECTION_ID}/items/publish`,
+//       { itemIds: uniqueClassItemIds },
+//       {
+//         headers: {
+//           Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
+
+//     console.log("Publishing Response for 'Classes':", uniquePublishResponse.data);
+//   } catch (error) {
+//     console.error("An error occurred while publishing 'Classes' items:", error.response?.data || error.message);
+//   }
+// }
+
+// // Periodic runner for "Classes"
+// async function periodicUniqueClassSync(intervalMs) {
+//   console.log("Starting unique class sync process...");
+//   setInterval(async () => {
+//     console.log(`Executing sync for 'Classes' at ${new Date().toISOString()}`);
+//     await publishUniqueClasses();
+//   }, intervalMs);
+// }
+
+// Run periodic sync for "Classes" every 30 seconds
+// periodicUniqueClassSync(30 * 1000);
 
 
 // Airtable setup
@@ -1386,7 +1453,7 @@ async function syncAirtableToWebflow() {
         if (needsUpdate) {
           console.log(`Record with Airtable ID ${airtableRecordId} has changes. Updating the following fields: ${Object.keys(fieldsToUpdate).join(", ")}`);
           try {
-            const updateURL = `${webflowBaseURL}/${webflowRecord.id}`;
+            const updateURL = `${webflowBaseURL}/${webflowRecord.id}/live`;
             await axios.patch(updateURL, { fieldData: fieldsToUpdate }, { headers: webflowHeaders });
             console.log(`Successfully updated record in Webflow.`);
           } catch (webflowError) {
@@ -1397,7 +1464,8 @@ async function syncAirtableToWebflow() {
         }
       } else {
         try {
-          await axios.post(webflowBaseURL, webflowData, { headers: webflowHeaders });
+          const newurl =`${webflowBaseURL}/live`
+          await axios.post(newurl, webflowData, { headers: webflowHeaders });
           console.log(`Successfully pushed new record to Webflow.`);
         } catch (webflowError) {
           console.error(`Error pushing new record to Webflow:`, webflowError.response?.data || webflowError.message);
@@ -1425,102 +1493,102 @@ runPeriodically(30 * 1000);
 
 
 
-const SITE_ID = "670d37b3620fd9656047ce2d";
-const API_BASE_URL = "https://api.webflow.com/v2";
+// const SITE_ID = "670d37b3620fd9656047ce2d";
+// const API_BASE_URL = "https://api.webflow.com/v2";
 
-// Publish staged items of purchases
-async function publishStagedItems() {
-  try {
-    // Fetch all collections for the site
-    const collectionsResponse = await axios.get(`${API_BASE_URL}/sites/${SITE_ID}/collections`, {
-      headers: {
-        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-        "Accept-Version": "1.0.0",
-      },
-    });
+// // Publish staged items of purchases
+// async function publishStagedItems() {
+//   try {
+//     // Fetch all collections for the site
+//     const collectionsResponse = await axios.get(`${API_BASE_URL}/sites/${SITE_ID}/collections`, {
+//       headers: {
+//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//         "Accept-Version": "1.0.0",
+//       },
+//     });
 
-    const collections = collectionsResponse.data.collections || [];
-    if (!collections.length) {
-      console.log("No collections found.");
-      return;
-    }
+//     const collections = collectionsResponse.data.collections || [];
+//     if (!collections.length) {
+//       console.log("No collections found.");
+//       return;
+//     }
 
-    console.log(
-      "Available Collections:",
-      collections.map((col) => ({
-        id: col.id,
-        name: col.displayName,
-        slug: col.slug,
-      }))
-    );
+//     console.log(
+//       "Available Collections:",
+//       collections.map((col) => ({
+//         id: col.id,
+//         name: col.displayName,
+//         slug: col.slug,
+//       }))
+//     );
 
-    const targetCollection = collections.find(
-      (collection) => collection.displayName === "Purchases"
-    );
+//     const targetCollection = collections.find(
+//       (collection) => collection.displayName === "Purchases"
+//     );
 
-    if (!targetCollection) {
-      console.log("Target collection not found. Ensure the collection name matches exactly.");
-      return;
-    }
+//     if (!targetCollection) {
+//       console.log("Target collection not found. Ensure the collection name matches exactly.");
+//       return;
+//     }
 
-    const COLLECTION_ID = targetCollection.id;
-    console.log(`Using Collection ID: ${COLLECTION_ID}`);
+//     const COLLECTION_ID = targetCollection.id;
+//     console.log(`Using Collection ID: ${COLLECTION_ID}`);
 
-    // Fetch items in the collection
-    const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID}/items`, {
-      headers: {
-        Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-        "Accept-Version": "1.0.0",
-      },
-    });
+//     // Fetch items in the collection
+//     const itemsResponse = await axios.get(`${API_BASE_URL}/collections/${COLLECTION_ID}/items`, {
+//       headers: {
+//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//         "Accept-Version": "1.0.0",
+//       },
+//     });
 
-    const items = itemsResponse.data.items || [];
+//     const items = itemsResponse.data.items || [];
 
-    // Filter out items where 'lastPublished' is null or if they have been updated since last publication
-    const stagedItemIds = items
-      .filter((item) => {
-        // If the item has not been published yet or has been updated since its last publish
-        return item.lastPublished === null || new Date(item.lastUpdated) > new Date(item.lastPublished);
-      })
-      .map((item) => item.id);
+//     // Filter out items where 'lastPublished' is null or if they have been updated since last publication
+//     const stagedItemIds = items
+//       .filter((item) => {
+//         // If the item has not been published yet or has been updated since its last publish
+//         return item.lastPublished === null || new Date(item.lastUpdated) > new Date(item.lastPublished);
+//       })
+//       .map((item) => item.id);
 
-    if (!stagedItemIds.length) {
-      console.log("No items to publish.");
-      return;
-    }
+//     if (!stagedItemIds.length) {
+//       console.log("No items to publish.");
+//       return;
+//     }
 
-    console.log(`Items ready for publishing: ${stagedItemIds}`);
+//     console.log(`Items ready for publishing: ${stagedItemIds}`);
 
-    // Publish the items
-    const publishResponse = await axios.post(
-      `${API_BASE_URL}/collections/${COLLECTION_ID}/items/publish`,
-      { itemIds: stagedItemIds },
-      {
-        headers: {
-          Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+//     // Publish the items
+//     const publishResponse = await axios.post(
+//       `${API_BASE_URL}/collections/${COLLECTION_ID}/items/publish`,
+//       { itemIds: stagedItemIds },
+//       {
+//         headers: {
+//           Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
 
-    console.log("Publish Response:", publishResponse.data);
-  } catch (error) {
-    console.error("Error publishing staged items:", error.response?.data || error.message);
-  }
-}
+//     console.log("Publish Response:", publishResponse.data);
+//   } catch (error) {
+//     console.error("Error publishing staged items:", error.response?.data || error.message);
+//   }
+// }
 
-publishStagedItems();
+// publishStagedItems();
 
 
-async function runPeriodicallys(intervalMs) {
-  console.log("Starting periodic sync...");
-  setInterval(async () => {
-    console.log(`Running sync at ${new Date().toISOString()}`);
-    await publishStagedItems();
-  }, intervalMs);
-}
+// async function runPeriodicallys(intervalMs) {
+//   console.log("Starting periodic sync...");
+//   setInterval(async () => {
+//     console.log(`Running sync at ${new Date().toISOString()}`);
+//     await publishStagedItems();
+//   }, intervalMs);
+// }
 
-runPeriodicallys(30 * 1000);
+// runPeriodicallys(30 * 1000);
 
 
 // Periodic processing of new classes
