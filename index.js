@@ -569,7 +569,12 @@ async function syncRemainingSeats() {
       const endtime = airtableRecord.fields["End Time"];
       const location = airtableRecord.fields["Location"];
       const Description = airtableRecord.fields["Description"];
-      const publish = airtableRecord.fields["Publish / Unpublish"]
+      const publish = airtableRecord.fields["Publish / Unpublish"];
+      const id1 = airtableRecord.fields["Item Id (from Related Classes )"];
+      const id2 = airtableRecord.fields["Item Id 2 (from Related Classes )"];
+      const instructname = (airtableRecord.fields["Instructor Name (from Instructors)"] || []).join(", ");
+      const instructcompany = (airtableRecord.fields["Instructor Company (from Instructors)"] || []).join(", ");
+      const instructdetails = (airtableRecord.fields["Instructor Details (from Instructors)"] || []).join(", ");
 
       if (!airtableSeatsRemaining) {
         console.warn(`Airtable record ${airtableId} is missing the "Number of seats remaining" field.`);
@@ -590,17 +595,38 @@ async function syncRemainingSeats() {
         const webflowStartTime = webflowRecord.fieldData["start-time"];
         const webflowEndTime = webflowRecord.fieldData["end-time"];
         const webflowLocation = webflowRecord.fieldData["location"];
-        const webflowdiscription = webflowRecord.fieldData["description"]
+        const webflowDescription = webflowRecord.fieldData["description"];
+        const webflowRelatedClasses = webflowRecord.fieldData["related-classes"];
+        const isMember = webflowRecord.fieldData["member"]; // "Yes" or "No"
+        const webflowInstructor = webflowRecord.fieldData["instructor-name"];
+        const webflowInstDetails = webflowRecord.fieldData["instructor-details"];
+        const webflowCompany = webflowRecord.fieldData["instructor-company"];
+        const seatnumber = webflowRecord.fieldData["number-of-seats"];
 
-        // Check for any discrepancies between Airtable and Webflow
+        // Assign the correct related-classes ID based on the member value
+        let newRelatedClassId = null;
+        if (isMember === "Yes") {
+          newRelatedClassId = id1;
+        } else if (isMember === "No") {
+          newRelatedClassId = id2;
+        } else {
+          console.warn(`Webflow record ${webflowRecord.id} has an invalid "member" value.`);
+        }
+
+        // Check for discrepancies between Airtable and Webflow
         const hasDifferences =
           String(webflowSeatsRemaining) !== String(airtableSeatsRemaining) ||
           String(webflowNameOfClass) !== String(nameofclass) ||
           String(webflowRoi) !== String(roi) ||
           String(webflowStartTime) !== String(starttime) ||
           String(webflowEndTime) !== String(endtime) ||
-          String(webflowLocation) !== String(location) || 
-          String(webflowdiscription) !== String(Description) ;
+          String(webflowLocation) !== String(location) ||
+          String(webflowDescription) !== String(Description) ||
+          (newRelatedClassId && String(webflowRelatedClasses) !== String(newRelatedClassId)) ||
+          String(webflowInstructor) !== String(instructname) ||
+          String(webflowInstDetails) !== String(instructdetails) ||
+          String(webflowCompany) !== String(instructcompany) ||
+          String(seatnumber) !== String(numberOfSeats);
 
         if (hasDifferences) {
           // Update Webflow record
@@ -614,8 +640,12 @@ async function syncRemainingSeats() {
                 "price-roii-participants": roi,
                 "start-time": starttime,
                 "end-time": endtime,
-                "location":location,
-                "description":Description
+                location: location,
+                description: Description,
+                "related-classes": newRelatedClassId,
+                "instructor-name": instructname,
+                "instructor-company": instructcompany,
+                "instructor-details": instructdetails,
               },
             };
 
@@ -636,6 +666,7 @@ async function syncRemainingSeats() {
     console.error("Error fetching Airtable data:", airtableError.response?.data || airtableError.message);
   }
 }
+
 
 // Run the sync function
 syncRemainingSeats();
