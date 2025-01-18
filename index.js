@@ -265,11 +265,14 @@ function generateRandomCode(length) {
 }
 
 // Fetch new records from Airtable
+// Fetch new records from Airtable
 async function fetchNewClasses() {
   try {
     const records = await airtable
       .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME)
-      .select({ filterByFormula: "NOT({Item Id})" })
+      .select({ 
+        filterByFormula: "{Publish / Unpublish} = 'Publish'" 
+      })
       .all();
     console.log("Fetched new records from Airtable:", records.map((rec) => rec.fields));
     return records.map((record) => ({ id: record.id, ...record.fields }));
@@ -278,6 +281,7 @@ async function fetchNewClasses() {
     return [];
   }
 }
+
 
 // Create Stripe products and coupon code
 async function createStripeProductsAndCoupon(classDetails) {
@@ -671,7 +675,7 @@ async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2 ,itemId
       "Member Price ID": String(stripeInfo?.memberPrice?.id ?? "Unknown Member Price ID"),
       "Non-Member Price ID": String(stripeInfo?.nonMemberPrice?.id ?? "Unknown Non-Member Price ID"),
       "Coupon Code": generatedCode2,
-      "Publish / Unpublish":"Publish"
+      "Publish / Unpublish":"Update"
     });
 
     console.log("Airtable record updated successfully!");
