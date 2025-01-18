@@ -228,6 +228,7 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY
 const AIRTABLE_TABLE_NAME3 = process.env.AIRTABLE_TABLE_NAME3
 const WEBFLOW_COLLECTION_ID2 = process.env.WEBFLOW_COLLECTION_ID2
 const AIRTABLE_TABLE_NAME4 = process.env.AIRTABLE_TABLE_NAME4
+const WEBFLOW_COLLECTION_ID3 = process.env.WEBFLOW_COLLECTION_ID3
 
 function logError(context, error) {
   console.error(`[ERROR] ${context}:`, error.message || error);
@@ -407,6 +408,12 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const relatedClassIdsForMember = classDetails["Item Id (from Related Classes )"] || [];
     const relatedClassIdsForNonMember = classDetails["Item Id 2 (from Related Classes )"] || [];
 
+    // const categoryforMember = classDetails["item id (from Main Category)"] || [];
+    // const categoryforNonmember = classDetails["item id 2 (from Main Category)"] || [];
+
+    // const validatecategoryforMember = await validateWebflowItemIdsforcategory(categoryforMember);
+    // const validatecategoryforNonmember = await validateWebflowItemIdsforcategory(categoryforNonmember)
+
     // Validate the related class IDs against Webflow data
     const validatedRelatedClassIdsForMember = await validateWebflowItemIds(relatedClassIdsForMember);
     const validatedRelatedClassIdsForNonMember = await validateWebflowItemIds(relatedClassIdsForNonMember);
@@ -418,18 +425,21 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
       let nonMemberValue = "No";
       let paymentLink = "";
       let relatedClassIds = [];
+      // let category = [];
 
       if (dropdownValue === "Member") {
         memberValue = "Yes";
         nonMemberValue = "No";
         paymentLink = stripeInfo.memberPaymentLink.url;
         relatedClassIds = validatedRelatedClassIdsForMember;
+        // category = validatecategoryforMember;
 
       } else if (dropdownValue === "Non-Member") {
         memberValue = "No";
         nonMemberValue = "Yes";
         paymentLink = stripeInfo.nonMemberPaymentLink.url;
         relatedClassIds = validatedRelatedClassIdsForNonMember;
+        // category = validatecategoryforNonmember ;
 
       }
       const slug = generateSlug(classDetails, dropdownValue);
@@ -515,6 +525,25 @@ async function validateWebflowItemIds(itemIds) {
   }
 }
 
+// async function validateWebflowItemIdsforcategory(itemIds) {
+//   try {
+//     const response = await axios.get(`https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID3}/items`, {
+//       headers: {
+//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+//         "Content-Type": "application/json",
+//       },
+//     });
+
+//     const webflowItems1 = response.data.items; // Webflow items data
+//     const webflowItemIds1 = new Set(webflowItems1.map((item) => item.id)); // Create a set of Webflow item IDs
+
+//     // Return only IDs that exist in Webflow
+//     return itemIds.filter((id) => webflowItemIds1.has(id));
+//   } catch (error) {
+//     console.error("Error validating Webflow item IDs:", error.message);
+//     throw error;
+//   }
+// }
 
 const airtableBaseURLs = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
 const airtableHeaderss = {
@@ -1728,7 +1757,102 @@ async function runPeriodicallyswe(intervalMs) {
   }, intervalMs);
 }
 
+
+
 runPeriodicallyswe(50 * 1000);
+
+const airtableBaseURL4 = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/Category`;
+const airtableHeaders4 = {
+  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+};
+
+// Webflow API Configuration
+const webflowBaseURL4 = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID3}/items`;
+const webflowHeaders4 = {
+  Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+  "Content-Type": "application/json",
+  Accept: "application/json",
+};
+
+async function syncCategoriesToWebflow() {
+  try {
+    // Fetch Airtable categories
+    const airtableCategories = (await axios.get(airtableBaseURL4, { headers: airtableHeaders4 })).data.records;
+
+    console.log(`Fetched ${airtableCategories.length} categories from Airtable.`);
+
+    // Fetch Webflow categories
+    const existingWebflowCategories = (await axios.get(webflowBaseURL4, { headers: webflowHeaders4 })).data.items || [];
+    const webflowCategoryIds = new Set(existingWebflowCategories.map(record => record.fieldData["category-airtable-id"]));
+
+    let hasChanges = false; // Flag to track if new categories need to be added
+
+    // Process each category from Airtable
+    for (const category of airtableCategories) {
+      const { id: airtableCategoryId, fields } = category;
+      const { "Category Name": categoryName, "Related Classes": relatedClasses, "Item Id (from Biaw Classes)": itemIdFromBiawClasses, "Item Id 2 (from Biaw Classes)": itemId2FromBiawClasses } = fields;
+
+      // Skip if the category already exists in Webflow
+      if (webflowCategoryIds.has(airtableCategoryId)) {
+        console.log(`Category with Airtable ID ${airtableCategoryId} already exists in Webflow. Skipping.`);
+        continue; // Skip processing this category
+      }
+
+      console.log(`Processing category with Airtable ID ${airtableCategoryId}.`);
+
+      // Validate Webflow Item IDs
+      const validMemberIds = await validateWebflowItemIds(itemIdFromBiawClasses || []);
+      const validNonMemberIds = await validateWebflowItemIds(itemId2FromBiawClasses || []);
+
+      console.log("Valid member Item Ids:", validMemberIds);
+      console.log("Valid non-member Item Ids:", validNonMemberIds);
+
+      const baseCategoryData = {
+        fieldData: {
+          name: categoryName,
+          "related-classes": relatedClasses || [],
+          "category-airtable-id": airtableCategoryId,
+        },
+      };
+
+      // Prepare category data for both "yes" and "no" member statuses
+      const categoriesToProcess = [
+        { ...baseCategoryData, fieldData: { ...baseCategoryData.fieldData, "member-non-member": "Yes", "related-classes": validMemberIds } },
+        { ...baseCategoryData, fieldData: { ...baseCategoryData.fieldData, "member-non-member": "No", "related-classes": validNonMemberIds } }
+      ];
+
+      // Process both versions
+      for (const categoryData of categoriesToProcess) {
+        console.log(`Creating new category with Airtable ID ${airtableCategoryId} in Webflow.`);
+        await axios.post(`${webflowBaseURL4}/live`, categoryData, { headers: webflowHeaders });
+        console.log(`Successfully created new category in Webflow.`);
+        hasChanges = true; // Flag as new category
+      }
+    }
+
+    // If there were no new categories, skip further processing
+    if (!hasChanges) {
+      console.log("No new categories, skipping Webflow update.");
+    }
+
+  } catch (error) {
+    console.error("Error during synchronization:", error.response?.data || error.message);
+  }
+}
+
+syncCategoriesToWebflow();
+
+
+async function runPeriodicallycate(intervalMs) {
+  console.log("Starting periodic sync...");
+  setInterval(async () => {
+    console.log(`Running sync at ${new Date().toISOString()}`);
+    await syncCategoriesToWebflow();
+  }, intervalMs);
+}
+
+runPeriodicallycate(50 * 1000)
+
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
