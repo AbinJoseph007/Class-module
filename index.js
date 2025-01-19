@@ -1776,65 +1776,50 @@ const webflowHeaders4 = {
 
 async function syncCategoriesToWebflow() {
   try {
-    // Fetch Airtable categories
     const airtableCategories = (await axios.get(airtableBaseURL4, { headers: airtableHeaders4 })).data.records;
-
     console.log(`Fetched ${airtableCategories.length} categories from Airtable.`);
 
-    // Fetch Webflow categories
     const existingWebflowCategories = (await axios.get(webflowBaseURL4, { headers: webflowHeaders4 })).data.items || [];
-    const webflowCategoryIds = new Set(existingWebflowCategories.map(record => record.fieldData["category-airtable-id"]));
+    const webflowCategoriesByAirtableId = existingWebflowCategories.reduce((acc, record) => {
+      (acc[record.fieldData["category-airtable-id"]] ||= []).push(record);
+      return acc;
+    }, {});
 
-    let hasChanges = false; // Flag to track if new categories need to be added
+    for (const { id: airtableCategoryId, fields } of airtableCategories) {
+      const { "Category Name": name, "Related Classes": relatedClasses, 
+              "Item Id (from Biaw Classes)": memberIds = [], 
+              "Item Id 2 (from Biaw Classes)": nonMemberIds = [] } = fields;
 
-    // Process each category from Airtable
-    for (const category of airtableCategories) {
-      const { id: airtableCategoryId, fields } = category;
-      const { "Category Name": categoryName, "Related Classes": relatedClasses, "Item Id (from Biaw Classes)": itemIdFromBiawClasses, "Item Id 2 (from Biaw Classes)": itemId2FromBiawClasses } = fields;
-
-      // Skip if the category already exists in Webflow
-      if (webflowCategoryIds.has(airtableCategoryId)) {
-        console.log(`Category with Airtable ID ${airtableCategoryId} already exists in Webflow. Skipping.`);
-        continue; // Skip processing this category
-      }
-
-      console.log(`Processing category with Airtable ID ${airtableCategoryId}.`);
-
-      // Validate Webflow Item IDs
-      const validMemberIds = await validateWebflowItemIds(itemIdFromBiawClasses || []);
-      const validNonMemberIds = await validateWebflowItemIds(itemId2FromBiawClasses || []);
-
-      console.log("Valid member Item Ids:", validMemberIds);
-      console.log("Valid non-member Item Ids:", validNonMemberIds);
-
-      const baseCategoryData = {
-        fieldData: {
-          name: categoryName,
-          "related-classes": relatedClasses || [],
-          "category-airtable-id": airtableCategoryId,
-        },
-      };
-
-      // Prepare category data for both "yes" and "no" member statuses
       const categoriesToProcess = [
-        { ...baseCategoryData, fieldData: { ...baseCategoryData.fieldData, "member-non-member": "Yes", "related-classes": validMemberIds } },
-        { ...baseCategoryData, fieldData: { ...baseCategoryData.fieldData, "member-non-member": "No", "related-classes": validNonMemberIds } }
-      ];
+        { name, "related-classes": await validateWebflowItemIds(memberIds), "member-non-member": "Yes" },
+        { name, "related-classes": await validateWebflowItemIds(nonMemberIds), "member-non-member": "No" },
+      ].map(data => ({ fieldData: { ...data, "category-airtable-id": airtableCategoryId } }));
 
-      // Process both versions
       for (const categoryData of categoriesToProcess) {
-        console.log(`Creating new category with Airtable ID ${airtableCategoryId} in Webflow.`);
-        await axios.post(`${webflowBaseURL4}/live`, categoryData, { headers: webflowHeaders });
-        console.log(`Successfully created new category in Webflow.`);
-        hasChanges = true; // Flag as new category
+        const existingRecords = webflowCategoriesByAirtableId[airtableCategoryId]?.filter(
+          record => record.fieldData["member-non-member"] === categoryData.fieldData["member-non-member"]
+        ) || [];
+
+        if (existingRecords.length) {
+          for (const record of existingRecords) {
+            const updates = Object.fromEntries(
+              Object.entries(categoryData.fieldData).filter(([key, value]) =>
+                (record.fieldData[key] || "").toString() !== value.toString()
+              )
+            );
+            if (Object.keys(updates).length) {
+              console.log(`Updating Webflow record ${record.id} with changes:`, Object.keys(updates));
+              await axios.patch(`${webflowBaseURL4}/${record.id}/live`, { fieldData: updates }, { headers: webflowHeaders4 });
+            } else {
+              console.log(`Webflow record ${record.id} is up to date.`);
+            }
+          }
+        } else {
+          console.log(`Creating new category for Airtable ID ${airtableCategoryId}.`);
+          await axios.post(`${webflowBaseURL4}/live`, categoryData, { headers: webflowHeaders4 });
+        }
       }
     }
-
-    // If there were no new categories, skip further processing
-    if (!hasChanges) {
-      console.log("No new categories, skipping Webflow update.");
-    }
-
   } catch (error) {
     console.error("Error during synchronization:", error.response?.data || error.message);
   }
