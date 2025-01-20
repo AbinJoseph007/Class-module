@@ -599,6 +599,7 @@ async function syncRemainingSeats() {
       const location = airtableRecord.fields["Location"];
       const Description = airtableRecord.fields["Description"];
       const publish = airtableRecord.fields["Publish / Unpublish"];
+      const producttype = airtableRecord.fields['Product Type']
       const id1 = airtableRecord.fields["Item Id (from Related Classes )"];
       const id2 = airtableRecord.fields["Item Id 2 (from Related Classes )"];
       const instructname = (airtableRecord.fields["Instructor Name (from Instructors)"] || []).join(", ");
@@ -631,6 +632,7 @@ async function syncRemainingSeats() {
         const webflowInstDetails = webflowRecord.fieldData["instructor-details"];
         const webflowCompany = webflowRecord.fieldData["instructor-company"];
         const seatnumber = webflowRecord.fieldData["number-of-seats"];
+        const webflowproducttype = webflowRecord.fieldData['class-type']
 
         // Assign the correct related-classes ID based on the member value
         let newRelatedClassId = null;
@@ -655,7 +657,8 @@ async function syncRemainingSeats() {
           String(webflowInstructor) !== String(instructname) ||
           String(webflowInstDetails) !== String(instructdetails) ||
           String(webflowCompany) !== String(instructcompany) ||
-          String(seatnumber) !== String(numberOfSeats);
+          String(seatnumber) !== String(numberOfSeats) ||
+          String(webflowproducttype) !== String(producttype);
 
         if (hasDifferences) {
           // Update Webflow record
@@ -675,6 +678,7 @@ async function syncRemainingSeats() {
                 "instructor-name": instructname,
                 "instructor-company": instructcompany,
                 "instructor-details": instructdetails,
+                "class-type":producttype
               },
             };
 
