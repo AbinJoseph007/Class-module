@@ -420,12 +420,6 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const relatedClassIdsForMember = classDetails["Item Id (from Related Classes )"] || [];
     const relatedClassIdsForNonMember = classDetails["Item Id 2 (from Related Classes )"] || [];
 
-    // const categoryforMember = classDetails["item id (from Main Category)"] || [];
-    // const categoryforNonmember = classDetails["item id 2 (from Main Category)"] || [];
-
-    // const validatecategoryforMember = await validateWebflowItemIdsforcategory(categoryforMember);
-    // const validatecategoryforNonmember = await validateWebflowItemIdsforcategory(categoryforNonmember)
-
     // Validate the related class IDs against Webflow data
     const validatedRelatedClassIdsForMember = await validateWebflowItemIds(relatedClassIdsForMember);
     const validatedRelatedClassIdsForNonMember = await validateWebflowItemIds(relatedClassIdsForNonMember);
@@ -536,26 +530,6 @@ async function validateWebflowItemIds(itemIds) {
     throw error;
   }
 }
-
-// async function validateWebflowItemIdsforcategory(itemIds) {
-//   try {
-//     const response = await axios.get(`https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID3}/items`, {
-//       headers: {
-//         Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-//         "Content-Type": "application/json",
-//       },
-//     });
-
-//     const webflowItems1 = response.data.items; // Webflow items data
-//     const webflowItemIds1 = new Set(webflowItems1.map((item) => item.id)); // Create a set of Webflow item IDs
-
-//     // Return only IDs that exist in Webflow
-//     return itemIds.filter((id) => webflowItemIds1.has(id));
-//   } catch (error) {
-//     console.error("Error validating Webflow item IDs:", error.message);
-//     throw error;
-//   }
-// }
 
 const airtableBaseURLs = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
 const airtableHeaderss = {
