@@ -674,7 +674,7 @@ async function syncRemainingSeats() {
                 "end-time": endtime,
                 location: location,
                 description: Description,
-                "related-classes": newRelatedClassId,
+                "related-classes": newRelatedClassId || null,
                 "instructor-name": instructname,
                 "instructor-company": instructcompany,
                 "instructor-details": instructdetails,
