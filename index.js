@@ -304,7 +304,7 @@ async function createStripeProductsAndCoupon(classDetails) {
     const memberPriceAmount = parsePrice(classDetails["Price - Member"]);
     const nonMemberPriceAmount = parsePrice(classDetails["Price - Non Member"]);
     const discountPercentage = parseInt(classDetails["% Discounts"] || "0", 10);
-
+    const maxDiscountedSeats = parseInt(classDetails["Maximum discounted seats"] || "0", 10);
 
     // Create only two Stripe products: One for Member and one for Non-Member
     const memberProduct = await stripe.products.create({
@@ -329,21 +329,26 @@ async function createStripeProductsAndCoupon(classDetails) {
       product: nonMemberProduct.id,
     });
 
-
     let discountCoupon = null;
     let promotionCode = null;
 
     if (!isNaN(discountPercentage) && discountPercentage > 0) {
-      // Now that the products exist, create the coupon and set applies_to
-      discountCoupon = await stripe.coupons.create({
+      // Build the coupon data conditionally
+      const couponData = {
         percent_off: discountPercentage,
         duration: 'once',
-        name: `${discountPercentage}% Discount for`,
+        name: `${discountPercentage}% Discount`,
         applies_to: {
-          products: [memberProduct.id, nonMemberProduct.id],  // Apply to both products
+          products: [memberProduct.id, nonMemberProduct.id], // Apply to both products
         },
-      });
+      };
 
+      // Include max_redemptions only if maxDiscountedSeats > 0
+      if (maxDiscountedSeats > 0) {
+        couponData.max_redemptions = maxDiscountedSeats;
+      }
+
+      discountCoupon = await stripe.coupons.create(couponData);
       console.log("Coupon created successfully:", discountCoupon);
 
       // Create a single promotion code
@@ -355,7 +360,6 @@ async function createStripeProductsAndCoupon(classDetails) {
 
       console.log("Promotion code created successfully:", promotionCode);
     }
-
 
     // Enable promo code during payment link creation
     const memberPaymentLink = await stripe.paymentLinks.create({
@@ -369,7 +373,15 @@ async function createStripeProductsAndCoupon(classDetails) {
     });
 
     return {
-      memberProduct,memberPrice,memberPaymentLink,nonMemberProduct,nonMemberPrice,nonMemberPaymentLink, discountCoupon,promotionCode,   generatedCode2: promotionCode?.code
+      memberProduct,
+      memberPrice,
+      memberPaymentLink,
+      nonMemberProduct,
+      nonMemberPrice,
+      nonMemberPaymentLink,
+      discountCoupon,
+      promotionCode,
+      generatedCode2: promotionCode?.code,
     };
   } catch (error) {
     console.error("Error processing class:", error.stack || error.message || error);
@@ -575,7 +587,7 @@ async function syncRemainingSeats() {
       return;
     }
 
-    // Create a map of Webflow records by Airtable ID (supports multiple records per Airtable ID)
+    // Create a map of Webflow records by Airtable ID
     const webflowRecordMap = new Map();
     webflowRecords.forEach((record) => {
       const airtableId = record.fieldData["airtablerecordid"];
@@ -598,18 +610,12 @@ async function syncRemainingSeats() {
       const endtime = airtableRecord.fields["End Time"];
       const location = airtableRecord.fields["Location"];
       const Description = airtableRecord.fields["Description"];
-      const publish = airtableRecord.fields["Publish / Unpublish"];
-      const producttype = airtableRecord.fields['Product Type']
-      const id1 = airtableRecord.fields["Item Id (from Related Classes )"];
-      const id2 = airtableRecord.fields["Item Id 2 (from Related Classes )"];
+      const producttype = airtableRecord.fields["Product Type"];
+      const id1 = airtableRecord.fields["Item Id (from Related Classes )"] || null;
+      const id2 = airtableRecord.fields["Item Id 2 (from Related Classes )"] || null;
       const instructname = (airtableRecord.fields["Instructor Name (from Instructors)"] || []).join(", ");
       const instructcompany = (airtableRecord.fields["Instructor Company (from Instructors)"] || []).join(", ");
       const instructdetails = (airtableRecord.fields["Instructor Details (from Instructors)"] || []).join(", ");
-
-      if (!airtableSeatsRemaining) {
-        console.warn(`Airtable record ${airtableId} is missing the "Number of seats remaining" field.`);
-        continue;
-      }
 
       const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
 
@@ -619,69 +625,61 @@ async function syncRemainingSeats() {
       }
 
       for (const webflowRecord of webflowRecordsToUpdate) {
-        const webflowSeatsRemaining = webflowRecord.fieldData["number-of-remaining-seats"];
-        const webflowNameOfClass = webflowRecord.fieldData["name"];
-        const webflowRoi = webflowRecord.fieldData["price-roii-participants"];
-        const webflowStartTime = webflowRecord.fieldData["start-time"];
-        const webflowEndTime = webflowRecord.fieldData["end-time"];
-        const webflowLocation = webflowRecord.fieldData["location"];
-        const webflowDescription = webflowRecord.fieldData["description"];
-        const webflowRelatedClasses = webflowRecord.fieldData["related-classes"];
-        const isMember = webflowRecord.fieldData["member"]; // "Yes" or "No"
-        const webflowInstructor = webflowRecord.fieldData["instructor-name"];
-        const webflowInstDetails = webflowRecord.fieldData["instructor-details"];
-        const webflowCompany = webflowRecord.fieldData["instructor-company"];
-        const seatnumber = webflowRecord.fieldData["number-of-seats"];
-        const webflowproducttype = webflowRecord.fieldData['class-type']
+        let isMember = webflowRecord.fieldData["member"];
 
-        // Assign the correct related-classes ID based on the member value
+        // Handle undefined or invalid member values
+        if (isMember === undefined || (isMember !== "Yes" && isMember !== "No")) {
+          console.warn(`Webflow record ${webflowRecord.id} has an invalid "member" value: "${isMember}"`);
+          isMember = null; // Default to null for invalid member values
+        }
+
+        // Determine the new related class ID based on member value
         let newRelatedClassId = null;
         if (isMember === "Yes") {
           newRelatedClassId = id1;
         } else if (isMember === "No") {
           newRelatedClassId = id2;
-        } else {
-          console.warn(`Webflow record ${webflowRecord.id} has an invalid "member" value.`);
         }
 
         // Check for discrepancies between Airtable and Webflow
         const hasDifferences =
-          String(webflowSeatsRemaining) !== String(airtableSeatsRemaining) ||
-          String(webflowNameOfClass) !== String(nameofclass) ||
-          String(webflowRoi) !== String(roi) ||
-          String(webflowStartTime) !== String(starttime) ||
-          String(webflowEndTime) !== String(endtime) ||
-          String(webflowLocation) !== String(location) ||
-          String(webflowDescription) !== String(Description) ||
-          (newRelatedClassId && String(webflowRelatedClasses) !== String(newRelatedClassId)) ||
-          String(webflowInstructor) !== String(instructname) ||
-          String(webflowInstDetails) !== String(instructdetails) ||
-          String(webflowCompany) !== String(instructcompany) ||
-          String(seatnumber) !== String(numberOfSeats) ||
-          String(webflowproducttype) !== String(producttype);
+          String(webflowRecord.fieldData["number-of-remaining-seats"]) !== String(airtableSeatsRemaining) ||
+          String(webflowRecord.fieldData["number-of-seats"]) !== String(numberOfSeats) ||
+          String(webflowRecord.fieldData["name"]) !== String(nameofclass) ||
+          String(webflowRecord.fieldData["price-roii-participants"]) !== String(roi) ||
+          String(webflowRecord.fieldData["start-time"]) !== String(starttime) ||
+          String(webflowRecord.fieldData["end-time"]) !== String(endtime) ||
+          String(webflowRecord.fieldData["location"]) !== String(location) ||
+          String(webflowRecord.fieldData["description"]) !== String(Description) ||
+          String(webflowRecord.fieldData["related-classes"] || null) !== String(newRelatedClassId || null) ||
+          String(webflowRecord.fieldData["instructor-name"]) !== String(instructname) ||
+          String(webflowRecord.fieldData["instructor-company"]) !== String(instructcompany) ||
+          String(webflowRecord.fieldData["instructor-details"]) !== String(instructdetails) ||
+          String(webflowRecord.fieldData["class-type"]) !== String(producttype);
 
         if (hasDifferences) {
-          // Update Webflow record
-          try {
-            const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
-            const updateData = {
-              fieldData: {
-                "number-of-remaining-seats": String(airtableSeatsRemaining),
-                "number-of-seats": String(numberOfSeats),
-                name: nameofclass,
-                "price-roii-participants": roi,
-                "start-time": starttime,
-                "end-time": endtime,
-                location: location,
-                description: Description,
-                "related-classes": newRelatedClassId || null,
-                "instructor-name": instructname,
-                "instructor-company": instructcompany,
-                "instructor-details": instructdetails,
-                "class-type":producttype
-              },
-            };
+          // Prepare the update payload
+          const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
+          const updateData = {
+            fieldData: {
+              "number-of-remaining-seats": String(airtableSeatsRemaining),
+              "number-of-seats": String(numberOfSeats),
+              name: nameofclass,
+              "price-roii-participants": roi,
+              "start-time": starttime,
+              "end-time": endtime,
+              location: location,
+              description: Description,
+              "related-classes": newRelatedClassId || null, // Remove related classes if null
+              "instructor-name": instructname,
+              "instructor-company": instructcompany,
+              "instructor-details": instructdetails,
+              "class-type": producttype,
+            },
+          };
 
+          // Perform the update
+          try {
             const updateResponse = await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
             console.log(`Successfully updated Webflow record for Airtable ID ${airtableId}:`, updateResponse.data);
           } catch (updateError) {
@@ -695,11 +693,10 @@ async function syncRemainingSeats() {
         }
       }
     }
-  } catch (airtableError) {
-    console.error("Error fetching Airtable data:", airtableError.response?.data || airtableError.message);
+  } catch (error) {
+    console.error("Error syncing data:", error.response?.data || error.message);
   }
 }
-
 
 // Run the sync function
 syncRemainingSeats();
