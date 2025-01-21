@@ -541,7 +541,6 @@ const webflowHeaderss = {
   Authorization: `Bearer ${WEBFLOW_API_KEY}`,
   "Content-Type": "application/json",
 };
-
 async function syncRemainingSeats() {
   try {
     // Fetch Airtable data
@@ -573,8 +572,42 @@ async function syncRemainingSeats() {
       }
     });
 
-    // Iterate through Airtable records and sync with Webflow
+    // Always sync `number-of-remaining-seats`
     for (const airtableRecord of airtableRecords) {
+      const airtableId = airtableRecord.id;
+      const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
+      const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
+
+      if (webflowRecordsToUpdate) {
+        for (const webflowRecord of webflowRecordsToUpdate) {
+          const webflowSeatsRemaining = webflowRecord.fieldData["number-of-remaining-seats"];
+          if (String(webflowSeatsRemaining) !== String(airtableSeatsRemaining)) {
+            const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
+            const updateData = {
+              fieldData: {
+                "number-of-remaining-seats": String(airtableSeatsRemaining),
+              },
+            };
+            try {
+              await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
+              console.log(`Updated number-of-remaining-seats for Webflow record ID ${webflowRecord.id}.`);
+            } catch (error) {
+              console.error(
+                `Error updating number-of-remaining-seats for Webflow record ID ${webflowRecord.id}:`,
+                error.response?.data || error.message
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // Filter Airtable records where Publish / Unpublish is "Update"
+    const recordsToSync = airtableRecords.filter(
+      (record) => record.fields["Publish / Unpublish"] === "Update"
+    );
+
+    for (const airtableRecord of recordsToSync) {
       const airtableId = airtableRecord.id;
       const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
       const numberOfSeats = airtableRecord.fields["Number of seats"];
@@ -601,13 +634,11 @@ async function syncRemainingSeats() {
       for (const webflowRecord of webflowRecordsToUpdate) {
         let isMember = webflowRecord.fieldData["member"];
 
-        // Handle undefined or invalid member values
         if (isMember === undefined || (isMember !== "Yes" && isMember !== "No")) {
           console.warn(`Webflow record ${webflowRecord.id} has an invalid "member" value: "${isMember}"`);
-          isMember = null; // Default to null for invalid member values
+          isMember = null;
         }
 
-        // Determine the new related class ID based on member value
         let newRelatedClassId = null;
         if (isMember === "Yes") {
           newRelatedClassId = id1;
@@ -615,9 +646,7 @@ async function syncRemainingSeats() {
           newRelatedClassId = id2;
         }
 
-        // Check for discrepancies between Airtable and Webflow
         const hasDifferences =
-          String(webflowRecord.fieldData["number-of-remaining-seats"]) !== String(airtableSeatsRemaining) ||
           String(webflowRecord.fieldData["number-of-seats"]) !== String(numberOfSeats) ||
           String(webflowRecord.fieldData["name"]) !== String(nameofclass) ||
           String(webflowRecord.fieldData["price-roii-participants"]) !== String(roi) ||
@@ -632,19 +661,17 @@ async function syncRemainingSeats() {
           String(webflowRecord.fieldData["class-type"]) !== String(producttype);
 
         if (hasDifferences) {
-          // Prepare the update payload
           const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
           const updateData = {
             fieldData: {
-              "number-of-remaining-seats": String(airtableSeatsRemaining),
               "number-of-seats": String(numberOfSeats),
               name: nameofclass,
-              "price-roii-participants": roi,
+              "price-roii-participants": String(roi),
               "start-time": starttime,
               "end-time": endtime,
               location: location,
               description: Description,
-              "related-classes": newRelatedClassId || null, // Remove related classes if null
+              "related-classes": newRelatedClassId || null,
               "instructor-name": instructname,
               "instructor-company": instructcompany,
               "instructor-details": instructdetails,
@@ -652,19 +679,31 @@ async function syncRemainingSeats() {
             },
           };
 
-          // Perform the update
           try {
-            const updateResponse = await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
-            console.log(`Successfully updated Webflow record for Airtable ID ${airtableId}:`, updateResponse.data);
+            await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
+            console.log(`Successfully updated Webflow record for Airtable ID ${airtableId}.`);
           } catch (updateError) {
             console.error(
               `Error updating Webflow record for Airtable ID ${airtableId}:`,
               updateError.response?.data || updateError.message
             );
           }
-        } else {
-          console.log(`No changes needed for Airtable ID ${airtableId} and Webflow record ID ${webflowRecord.id}.`);
         }
+      }
+
+      // Mark Airtable record as "Updated"
+      try {
+        await axios.patch(
+          `${airtableBaseURLs}/${airtableId}`,
+          { fields: { "Publish / Unpublish": "Updated" } },
+          { headers: airtableHeaderss }
+        );
+        console.log(`Marked Airtable record ${airtableId} as "Updated".`);
+      } catch (airtableError) {
+        console.error(
+          `Error marking Airtable record ${airtableId} as "Updated":`,
+          airtableError.response?.data || airtableError.message
+        );
       }
     }
   } catch (error) {
@@ -755,78 +794,78 @@ async function processNewClasses() {
   }
 }
 
-async function deleteWebflowItemsForDeletedAirtableRecords() {
-  try {
-    // Fetch Airtable records marked for deletion
-    const airtableRecords = (await axios.get(airtableBaseURLs, { headers: airtableHeaderss })).data.records.filter(
-      (record) => record.fields["Publish / Unpublish"] === "Delete"
-    );
+// async function deleteWebflowItemsForDeletedAirtableRecords() {
+//   try {
+//     // Fetch Airtable records marked for deletion
+//     const airtableRecords = (await axios.get(airtableBaseURLs, { headers: airtableHeaderss })).data.records.filter(
+//       (record) => record.fields["Publish / Unpublish"] === "Delete"
+//     );
 
-    if (!airtableRecords.length) return console.log("No Airtable records marked for deletion.");
+//     if (!airtableRecords.length) return console.log("No Airtable records marked for deletion.");
 
-    // Fetch Webflow records
-    const webflowRecords = (await axios.get(webflowBaseURLs, { headers: webflowHeaderss })).data.items || [];
+//     // Fetch Webflow records
+//     const webflowRecords = (await axios.get(webflowBaseURLs, { headers: webflowHeaderss })).data.items || [];
 
-    // Find and delete matching Webflow records
-    for (const airtableRecord of airtableRecords) {
-      const matchingWebflowRecords = webflowRecords.filter(
-        (webflowRecord) => webflowRecord.fieldData["airtablerecordid"] === airtableRecord.id
-      );
+//     // Find and delete matching Webflow records
+//     for (const airtableRecord of airtableRecords) {
+//       const matchingWebflowRecords = webflowRecords.filter(
+//         (webflowRecord) => webflowRecord.fieldData["airtablerecordid"] === airtableRecord.id
+//       );
 
-      let allDeleted = true;
+//       let allDeleted = true;
 
-      for (const webflowRecord of matchingWebflowRecords) {
-        try {
-          const response = await fetch(
-            `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items/${webflowRecord.id}/live`,
-            { method: 'DELETE', headers: { Authorization: `Bearer ${WEBFLOW_API_KEY}` } }
-          );
+//       for (const webflowRecord of matchingWebflowRecords) {
+//         try {
+//           const response = await fetch(
+//             `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items/${webflowRecord.id}/live`,
+//             { method: 'DELETE', headers: { Authorization: `Bearer ${WEBFLOW_API_KEY}` } }
+//           );
 
-          if (response.ok) {
-            console.log(`Deleted Webflow record: ${webflowRecord.id}`);
-          } else {
-            console.error(`Failed to delete Webflow record: ${webflowRecord.id}`, await response.json());
-            allDeleted = false;
-          }
-        } catch (error) {
-          console.error(`Error deleting Webflow record: ${webflowRecord.id}`, error);
-          allDeleted = false;
-        }
-      }
+//           if (response.ok) {
+//             console.log(`Deleted Webflow record: ${webflowRecord.id}`);
+//           } else {
+//             console.error(`Failed to delete Webflow record: ${webflowRecord.id}`, await response.json());
+//             allDeleted = false;
+//           }
+//         } catch (error) {
+//           console.error(`Error deleting Webflow record: ${webflowRecord.id}`, error);
+//           allDeleted = false;
+//         }
+//       }
 
-      // Update Airtable record if all associated Webflow records were deleted
-      if (allDeleted) {
-        try {
-          const airtableUpdateURL = `${airtableBaseURLs}/${airtableRecord.id}`;
-          const updateData = {
-            fields: { "Publish / Unpublish": "Deleted" },
-          };
+//       // Update Airtable record if all associated Webflow records were deleted
+//       if (allDeleted) {
+//         try {
+//           const airtableUpdateURL = `${airtableBaseURLs}/${airtableRecord.id}`;
+//           const updateData = {
+//             fields: { "Publish / Unpublish": "Deleted" },
+//           };
 
-          const updateResponse = await axios.patch(airtableUpdateURL, updateData, { headers: airtableHeaderss });
-          console.log(`Updated Airtable record ${airtableRecord.id} to "Update".`);
-        } catch (updateError) {
-          console.error(`Error updating Airtable record ${airtableRecord.id}:`, updateError.response?.data || updateError.message);
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Error during deletion operation:", error.message);
-  }
-}
+//           const updateResponse = await axios.patch(airtableUpdateURL, updateData, { headers: airtableHeaderss });
+//           console.log(`Updated Airtable record ${airtableRecord.id} to "Update".`);
+//         } catch (updateError) {
+//           console.error(`Error updating Airtable record ${airtableRecord.id}:`, updateError.response?.data || updateError.message);
+//         }
+//       }
+//     }
+//   } catch (error) {
+//     console.error("Error during deletion operation:", error.message);
+//   }
+// }
 
-// Run the function
-deleteWebflowItemsForDeletedAirtableRecords();
+// // Run the function
+// deleteWebflowItemsForDeletedAirtableRecords();
 
 
-async function periodicUniqueClassSync(intervalMs) {
-  console.log("Starting unique class sync process...");
-  setInterval(async () => {
-    console.log(`Executing sync for 'Classes' at ${new Date().toISOString()}`);
-    await deleteWebflowItemsForDeletedAirtableRecords();
-  }, intervalMs);
-}
+// async function periodicUniqueClassSync(intervalMs) {
+//   console.log("Starting unique class sync process...");
+//   setInterval(async () => {
+//     console.log(`Executing sync for 'Classes' at ${new Date().toISOString()}`);
+//     await deleteWebflowItemsForDeletedAirtableRecords();
+//   }, intervalMs);
+// }
 
-periodicUniqueClassSync(30 * 1000);
+// periodicUniqueClassSync(30 * 1000);
 
 
 const UNIQUE_SITE_ID = "670d37b3620fd9656047ce2d";
