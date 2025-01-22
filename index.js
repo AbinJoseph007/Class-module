@@ -747,6 +747,94 @@ async function validateWebflowItemIds(itemIds) {
 // // }
 
 // // runPeriodicallyw(30 * 1000);
+const airtableBaseURLs = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+const airtableHeaderss = {
+  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+};
+
+const webflowBaseURLs = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`;
+const webflowHeaderss = {
+  Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+  "Content-Type": "application/json",
+};
+async function syncRemainingSeats() {
+  try {
+    // Fetch Airtable data
+    const airtableResponse = await axios.get(airtableBaseURLs, { headers: airtableHeaderss });
+    const airtableRecords = airtableResponse.data.records;
+
+    console.log(`Fetched ${airtableRecords.length} records from Airtable.`);
+
+    // Fetch Webflow data
+    let webflowRecords = [];
+    try {
+      const webflowResponse = await axios.get(webflowBaseURLs, { headers: webflowHeaderss });
+      webflowRecords = webflowResponse.data.items || [];
+      console.log(`Fetched ${webflowRecords.length} records from Webflow.`);
+    } catch (webflowError) {
+      console.error("Error fetching records from Webflow:", webflowError.response?.data || webflowError.message);
+      return;
+    }
+
+    // Create a map of Webflow records by Airtable ID
+    const webflowRecordMap = new Map();
+    webflowRecords.forEach((record) => {
+      const airtableId = record.fieldData["airtablerecordid"];
+      if (airtableId) {
+        if (!webflowRecordMap.has(airtableId)) {
+          webflowRecordMap.set(airtableId, []);
+        }
+        webflowRecordMap.get(airtableId).push(record);
+      }
+    });
+
+    // Always sync `number-of-remaining-seats`
+    for (const airtableRecord of airtableRecords) {
+      const airtableId = airtableRecord.id;
+      const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
+      const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
+
+      if (webflowRecordsToUpdate) {
+        for (const webflowRecord of webflowRecordsToUpdate) {
+          const webflowSeatsRemaining = webflowRecord.fieldData["number-of-remaining-seats"];
+          if (String(webflowSeatsRemaining) !== String(airtableSeatsRemaining)) {
+            const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
+            const updateData = {
+              fieldData: {
+                "number-of-remaining-seats": String(airtableSeatsRemaining),
+              },
+            };
+            try {
+              await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
+              console.log(`Updated number-of-remaining-seats for Webflow record ID ${webflowRecord.id}.`);
+            } catch (error) {
+              console.error(
+                `Error updating number-of-remaining-seats for Webflow record ID ${webflowRecord.id}:`,
+                error.response?.data || error.message
+              );
+            }
+          }
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error("Error syncing data:", error.response?.data || error.message);
+  }
+}
+
+// Run the sync function
+syncRemainingSeats();
+
+async function runPeriodicallyw(intervalMs) {
+  console.log("Starting periodic sync...");
+  setInterval(async () => {
+    console.log(`Running sync at ${new Date().toISOString()}`);
+    await syncRemainingSeats();
+  }, intervalMs);
+}
+
+runPeriodicallyw(30 * 1000);
 
 
 // Update Airtable record with Stripe Product ID
