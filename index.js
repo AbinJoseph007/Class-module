@@ -417,6 +417,12 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
+    const city = classDetails["City (from Location 2)"]?.[0] || "No details provided";
+    const state = classDetails["State (from Location 2)"]?.[0] || "No details provided";
+    const location2 = classDetails["Local Association Name (from Location 2)"]?.[0] || "No details provided";
+    const zipcode = classDetails["Zip (from Location 2)"]?.[0] || "No details provided";
+
+
     const relatedClassIdsForMember = classDetails["Item Id (from Related Classes )"] || [];
     const relatedClassIdsForNonMember = classDetails["Item Id 2 (from Related Classes )"] || [];
 
@@ -465,7 +471,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "field-id": String(classDetails["Field ID"]),
             date: classDetails.Date,
             "end-date": classDetails["End date"],
-            location: classDetails.Location,
+            location: location2,
             "payment-link": paymentLink,
             "start-time": classDetails["Start Time"],
             "end-time": classDetails["End Time"],
@@ -482,8 +488,12 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "airtablerecordid": classDetails.id,
             "member-non-member": dropdownValue,
             "member": memberValue,
+            "city":city,
+            "state":state,
+            "zip":zipcode,
+            "sort-order":String(classDetails['Sort order'] || "") ,
             "non-member": nonMemberValue,
-            "number-of-remaining-seats": classDetails["Number of seats remaining"],
+            "number-of-remaining-seats": String(classDetails["Number of seats"]),
             "related-classes": relatedClassIds, 
           },
         },
@@ -615,7 +625,11 @@ async function syncRemainingSeats() {
       const roi = airtableRecord.fields["Price - ROII Participants (Select)"];
       const starttime = airtableRecord.fields["Start Time"];
       const endtime = airtableRecord.fields["End Time"];
-      const location = airtableRecord.fields["Location"];
+      const startdate = airtableRecord.fields["Date"];
+      const enddate = airtableRecord.fields["End date"];
+      // const sortorder = airtableRecord.fields["Sort order"]
+      const zipcode = (airtableRecord.fields["zip"] || []).join(", ")
+      const location = (airtableRecord.fields["Local Association Name (from Location 2)"] || []).join(", ")
       const Description = airtableRecord.fields["Description"];
       const producttype = airtableRecord.fields["Product Type"];
       const id1 = airtableRecord.fields["Item Id (from Related Classes )"] || null;
@@ -652,6 +666,10 @@ async function syncRemainingSeats() {
           String(webflowRecord.fieldData["price-roii-participants"]) !== String(roi) ||
           String(webflowRecord.fieldData["start-time"]) !== String(starttime) ||
           String(webflowRecord.fieldData["end-time"]) !== String(endtime) ||
+          String(webflowRecord.fieldData["date"]) !== String(startdate)||
+          String(webflowRecord.fieldData["end-date"]) !== String(enddate) ||
+          // String(webflowRecord.fieldData["sort-order"]) !== String(sortorder) ||
+          String(webflowRecord.fieldData["zip"]) !== String(zipcode) ||
           String(webflowRecord.fieldData["location"]) !== String(location) ||
           String(webflowRecord.fieldData["description"]) !== String(Description) ||
           String(webflowRecord.fieldData["related-classes"] || null) !== String(newRelatedClassId || null) ||
@@ -676,6 +694,10 @@ async function syncRemainingSeats() {
               "instructor-company": instructcompany,
               "instructor-details": instructdetails,
               "class-type": producttype,
+              "end-date":enddate,
+              "date":startdate,
+              "zip":zipcode,
+              // "sort-order": String(sortorder) || null
             },
           };
 
@@ -1723,9 +1745,13 @@ async function syncCategoriesToWebflow() {
     }, {});
 
     for (const { id: airtableCategoryId, fields } of airtableCategories) {
-      const { "Category Name": name, "Related Classes": relatedClasses, 
-              "Item Id (from Biaw Classes)": memberIds = [], 
-              "Item Id 2 (from Biaw Classes)": nonMemberIds = [] } = fields;
+      const {
+        "Category Name": name,
+        "Related Classes": relatedClasses,
+        "Item Id (from Biaw Classes)": memberIds = [],
+        "Item Id 2 (from Biaw Classes)": nonMemberIds = [],
+        status,
+      } = fields;
 
       const categoriesToProcess = [
         { name, "related-classes": await validateWebflowItemIds(memberIds), "member-non-member": "Yes" },
@@ -1738,22 +1764,36 @@ async function syncCategoriesToWebflow() {
         ) || [];
 
         if (existingRecords.length) {
-          for (const record of existingRecords) {
-            const updates = Object.fromEntries(
-              Object.entries(categoryData.fieldData).filter(([key, value]) =>
-                (record.fieldData[key] || "").toString() !== value.toString()
-              )
-            );
-            if (Object.keys(updates).length) {
-              console.log(`Updating Webflow record ${record.id} with changes:`, Object.keys(updates));
-              await axios.patch(`${webflowBaseURL4}/${record.id}/live`, { fieldData: updates }, { headers: webflowHeaders4 });
-            } else {
-              console.log(`Webflow record ${record.id} is up to date.`);
+          // Update existing records if the status is "Updated"
+          if (status === "Updated") {
+            for (const record of existingRecords) {
+              const updates = Object.fromEntries(
+                Object.entries(categoryData.fieldData).filter(([key, value]) =>
+                  (record.fieldData[key] || "").toString() !== value.toString()
+                )
+              );
+              if (Object.keys(updates).length) {
+                console.log(`Updating Webflow record ${record.id} with changes:`, Object.keys(updates));
+                await axios.patch(`${webflowBaseURL4}/${record.id}/live`, { fieldData: updates }, { headers: webflowHeaders4 });
+                console.log(`Updating Airtable status for record ID: ${airtableCategoryId} to "Published".`);
+                await axios.patch(`${airtableBaseURL4}/${airtableCategoryId}`, {
+                  fields: { status: "Published" },
+                }, { headers: airtableHeaders4 });
+              } else {
+                console.log(`Webflow record ${record.id} is up to date.`);
+              }
             }
           }
         } else {
-          console.log(`Creating new category for Airtable ID ${airtableCategoryId}.`);
-          await axios.post(`${webflowBaseURL4}/live`, categoryData, { headers: webflowHeaders4 });
+          // Create a new category if the status is "Publish"
+          if (status === "Publish") {
+            console.log(`Creating new category for Airtable ID ${airtableCategoryId}.`);
+            await axios.post(`${webflowBaseURL4}/live`, categoryData, { headers: webflowHeaders4 });
+            console.log(`Updating Airtable status for record ID: ${airtableCategoryId} to "Published".`);
+            await axios.patch(`${airtableBaseURL4}/${airtableCategoryId}`, {
+              fields: { status: "Published" },
+            }, { headers: airtableHeaders4 });
+          }
         }
       }
     }
@@ -1761,6 +1801,7 @@ async function syncCategoriesToWebflow() {
     console.error("Error during synchronization:", error.response?.data || error.message);
   }
 }
+
 
 syncCategoriesToWebflow();
 
