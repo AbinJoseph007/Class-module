@@ -951,36 +951,94 @@ app.post("/api/endpoint", async (req, res) => {
   try {
     console.log("Received data:", { id, fields });
 
-    // Fetch matching Webflow record
+    // Fetch matching Webflow records
     const webflowResponse = await axios.get(webflowBaseURL2, { headers: webflowHeaders2 });
     const webflowRecords = webflowResponse.data.items || [];
-    const webflowRecord = webflowRecords.find((record) => record.fieldData?.airtablerecordid === id);
+    const matchingWebflowRecords = webflowRecords.filter(
+      (record) => record.fieldData?.airtablerecordid === id
+    );
 
-    if (!webflowRecord) {
-      console.warn(`No matching Webflow record found for Airtable ID: ${id}`);
-      return res.status(404).json({ error: "No matching Webflow record found" });
+    if (matchingWebflowRecords.length === 0) {
+      console.warn(`No matching Webflow records found for Airtable ID: ${id}`);
+      return res.status(404).json({ error: "No matching Webflow records found" });
     }
 
-    // Compare fields
-    const updates = {};
-    if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
-      updates["number-of-seats"] = String(fields["Number of seats"]);
-    }
-    if (webflowRecord.fieldData["number-of-remaining-seats"] !== String(fields["Number of seats remaining"])) {
-      updates["number-of-remaining-seats"] = String(fields["Number of seats remaining"]);
-    }
-    if (webflowRecord.fieldData.name !== fields.Name) {
-      updates.name = fields.Name;
-    }
-    // Add additional comparisons for other fields as needed...
+    for (const webflowRecord of matchingWebflowRecords) {
+      const updates = {};
 
-    // If updates are needed, send them to Webflow
-    if (Object.keys(updates).length > 0) {
-      const updateURL = `${webflowBaseURL2}/${webflowRecord.id}/live`;
-      await axios.patch(updateURL, { fieldData: updates }, { headers: webflowHeaders2 });
-      console.log(`Updated Webflow record ID: ${webflowRecord.id}`);
-    } else {
-      console.log(`No updates needed for Webflow record ID: ${webflowRecord.id}`);
+      // Map Airtable fields to Webflow fields and compare
+      if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
+        updates["number-of-seats"] = String(fields["Number of seats"]);
+      }
+      if (webflowRecord.fieldData["number-of-remaining-seats"] !== String(fields["Number of seats remaining"])) {
+        updates["number-of-remaining-seats"] = String(fields["Number of seats remaining"]);
+      }
+      if (webflowRecord.fieldData.name !== fields.Name) {
+        updates.name = fields.Name;
+      }
+      if (webflowRecord.fieldData["price-roii-participants"] !== String(fields["Price - ROII Participants (Select)"])) {
+        updates["price-roii-participants"] = String(fields["Price - ROII Participants (Select)"]);
+      }
+      if (webflowRecord.fieldData["start-time"] !== fields["Start Time"]) {
+        updates["start-time"] = fields["Start Time"];
+      }
+      if (webflowRecord.fieldData["end-time"] !== fields["End Time"]) {
+        updates["end-time"] = fields["End Time"];
+      }
+      if (webflowRecord.fieldData.location !== (fields["Local Association Name (from Location 2)"] || []).join(", ")) {
+        updates.location = (fields["Local Association Name (from Location 2)"] || []).join(", ");
+      }
+      if (webflowRecord.fieldData.description !== fields.Description) {
+        updates.description = fields.Description;
+      }
+      if (
+        webflowRecord.fieldData["related-classes"] !==
+        (fields["Item Id (from Related Classes )"] || []).join(", ")
+      ) {
+        updates["related-classes"] = (fields["Item Id (from Related Classes )"] || []).join(", ");
+      }
+      if (webflowRecord.fieldData["instructor-name"] !== (fields["Instructor Name (from Instructors)"] || []).join(", ")) {
+        updates["instructor-name"] = (fields["Instructor Name (from Instructors)"] || []).join(", ");
+      }
+      if (
+        webflowRecord.fieldData["instructor-company"] !==
+        (fields["Instructor Company (from Instructors)"] || []).join(", ")
+      ) {
+        updates["instructor-company"] = (fields["Instructor Company (from Instructors)"] || []).join(", ");
+      }
+      if (
+        webflowRecord.fieldData["instructor-details"] !==
+        (fields["Instructor Details (from Instructors)"] || []).join(", ")
+      ) {
+        updates["instructor-details"] = (fields["Instructor Details (from Instructors)"] || []).join(", ");
+      }
+      if (webflowRecord.fieldData["class-type"] !== fields["Product Type"].name) {
+        updates["class-type"] = fields["Product Type"].name;
+      }
+      if (webflowRecord.fieldData["end-date"] !== fields["End date"]) {
+        updates["end-date"] = fields["End date"];
+      }
+      if (webflowRecord.fieldData.date !== fields.Date) {
+        updates.date = fields.Date;
+      }
+      if (webflowRecord.fieldData.zip !== (fields["Zip (from Location 2)"] || []).join(", ")) {
+        updates.zip = (fields["Zip (from Location 2)"] || []).join(", ");
+      }
+      if (webflowRecord.fieldData["sort-order"] !== String(fields["Sort order"])) {
+        updates["sort-order"] = String(fields["Sort order"]);
+      }
+      if (webflowRecord.fieldData["class-delete-2"] !== "updated") {
+        updates["class-delete-2"] = "updated";
+      }
+
+      // If updates are needed, send them to Webflow
+      if (Object.keys(updates).length > 0) {
+        const updateURL = `${webflowBaseURL2}/${webflowRecord.id}/live`;
+        await axios.patch(updateURL, { fieldData: updates }, { headers: webflowHeaders2 });
+        console.log(`Updated Webflow record ID: ${webflowRecord.id}`);
+      } else {
+        console.log(`No updates needed for Webflow record ID: ${webflowRecord.id}`);
+      }
     }
 
     // Mark Airtable record as updated
@@ -997,6 +1055,7 @@ app.post("/api/endpoint", async (req, res) => {
     res.status(500).json({ error: "Sync failed" });
   }
 });
+
 
 // Airtable setup
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
