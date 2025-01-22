@@ -941,7 +941,7 @@ const webflowHeaders2 = {
 };
 
 // Webhook endpoint
-app.post("/webhook/airtable", async (req, res) => {
+app.post("/api/endpoint", async (req, res) => {
   const { id, fields } = req.body;
 
   try {
