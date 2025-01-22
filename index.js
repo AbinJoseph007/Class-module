@@ -945,7 +945,7 @@ app.post("/api/endpoint", async (req, res) => {
   const { id, fields } = req.body;
 
   try {
-    console.log(`Received webhook for Airtable record ID: ${id}`);
+    console.log("Received data:", { id, fields });
 
     // Fetch matching Webflow record
     const webflowResponse = await axios.get(webflowBaseURL2, { headers: webflowHeaders2 });
