@@ -966,6 +966,8 @@ app.post("/api/endpoint", async (req, res) => {
     for (const webflowRecord of matchingWebflowRecords) {
       const updates = {};
 
+       const priceROIIName = fields["Price - ROII Participants (Select)"]?.name;
+       const productTypeName = fields["Product Type"]?.name;
       // Compare and update fields
       if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
         updates["number-of-seats"] = String(fields["Number of seats"]);
@@ -979,8 +981,8 @@ app.post("/api/endpoint", async (req, res) => {
       if (webflowRecord.fieldData.name !== fields.Name) {
         updates.name = fields.Name;
       }
-      if (webflowRecord.fieldData["price-roii-participants"] !== String(fields["Price - ROII Participants (Select)"])) {
-        updates["price-roii-participants"] = String(fields["Price - ROII Participants (Select)"]);
+      if (webflowRecord.fieldData["price-roii-participants"] !== priceROIIName) {
+        updates["price-roii-participants"] = priceROIIName;
       }
       if (webflowRecord.fieldData["start-time"] !== fields["Start Time"]) {
         updates["start-time"] = fields["Start Time"];
@@ -997,11 +999,15 @@ app.post("/api/endpoint", async (req, res) => {
       if (webflowRecord.fieldData["zip"] !== fields["Zip (from Location 2)"].join(", ")) {
         updates["zip"] = fields["Zip (from Location 2)"].join(", ");
       }
-      if (webflowRecord.fieldData["location"] !== fields["Location"]) {
+      if (webflowRecord.fieldData["location"] !== fields["Local Association Name (from Location 2)"].join(", ")) {
         updates["location"] = fields["Location"];
       }
       if (webflowRecord.fieldData["description"] !== fields["Description"]) {
         updates["description"] = fields["Description"];
+      }
+
+     if (webflowRecord.fieldData["class-type"] !== productTypeName) {
+       updates["class-type"] = productTypeName;
       }
 
       // Handle related-classes field
@@ -1035,12 +1041,6 @@ app.post("/api/endpoint", async (req, res) => {
       }
       if (webflowRecord.fieldData["instructor-details"] !== instructdetails) {
         updates["instructor-details"] = instructdetails;
-      }
-
-      // Product type
-      const producttype = fields["Product Type"]?.name;
-      if (webflowRecord.fieldData["class-type"] !== producttype) {
-        updates["class-type"] = producttype;
       }
 
       // If there are updates, send them to Webflow
