@@ -921,78 +921,78 @@ async function processNewClasses() {
 
 
 
-app.post("/api/endpoint", (req, res) => {
-  const { id, fields } = req.body;
-
-  // Log or process the received data
-  console.log("Received data:", { id, fields });
-
-  // Send a response
-  res.status(200).json({ message: "Data received successfully" });
-});
-
-
-
-
-// const webflowBaseURL2 = `https://api.webflow.com/v2/collections/YOUR_COLLECTION_ID/items`;
-// const webflowHeaders2 = {
-//   Authorization: `Bearer YOUR_WEBFLOW_API_KEY`,
-//   "Content-Type": "application/json",
-// };
-
-// // Webhook endpoint
-// app.post("/api/endpoint", async (req, res) => {
+// app.post("/api/endpoint", (req, res) => {
 //   const { id, fields } = req.body;
 
-//   try {
-//     console.log("Received data:", { id, fields });
+//   // Log or process the received data
+//   console.log("Received data:", { id, fields });
 
-//     // Fetch matching Webflow record
-//     const webflowResponse = await axios.get(webflowBaseURL2, { headers: webflowHeaders2 });
-//     const webflowRecords = webflowResponse.data.items || [];
-//     const webflowRecord = webflowRecords.find((record) => record.fieldData?.airtablerecordid === id);
-
-//     if (!webflowRecord) {
-//       console.warn(`No matching Webflow record found for Airtable ID: ${id}`);
-//       return res.status(404).json({ error: "No matching Webflow record found" });
-//     }
-
-//     // Compare fields
-//     const updates = {};
-//     if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
-//       updates["number-of-seats"] = String(fields["Number of seats"]);
-//     }
-//     if (webflowRecord.fieldData["number-of-remaining-seats"] !== String(fields["Number of seats remaining"])) {
-//       updates["number-of-remaining-seats"] = String(fields["Number of seats remaining"]);
-//     }
-//     if (webflowRecord.fieldData.name !== fields.Name) {
-//       updates.name = fields.Name;
-//     }
-//     // Add additional comparisons for other fields as needed...
-
-//     // If updates are needed, send them to Webflow
-//     if (Object.keys(updates).length > 0) {
-//       const updateURL = `${webflowBaseURL2}/${webflowRecord.id}/live`;
-//       await axios.patch(updateURL, { fieldData: updates }, { headers: webflowHeaders2 });
-//       console.log(`Updated Webflow record ID: ${webflowRecord.id}`);
-//     } else {
-//       console.log(`No updates needed for Webflow record ID: ${webflowRecord.id}`);
-//     }
-
-//     // Mark Airtable record as updated
-//     await axios.patch(
-//       `${airtableBaseURL}/${id}`,
-//       { fields: { "Publish / Unpublish": "Updated" } },
-//       { headers: airtableHeaders }
-//     );
-//     console.log(`Marked Airtable record ${id} as "Updated".`);
-
-//     res.status(200).json({ message: "Sync completed successfully" });
-//   } catch (error) {
-//     console.error("Error syncing data:", error.response?.data || error.message);
-//     res.status(500).json({ error: "Sync failed" });
-//   }
+//   // Send a response
+//   res.status(200).json({ message: "Data received successfully" });
 // });
+
+
+
+
+const webflowBaseURL2 = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`;
+const webflowHeaders2 = {
+  Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+  "Content-Type": "application/json",
+};
+
+// Webhook endpoint
+app.post("/api/endpoint", async (req, res) => {
+  const { id, fields } = req.body;
+
+  try {
+    console.log("Received data:", { id, fields });
+
+    // Fetch matching Webflow record
+    const webflowResponse = await axios.get(webflowBaseURL2, { headers: webflowHeaders2 });
+    const webflowRecords = webflowResponse.data.items || [];
+    const webflowRecord = webflowRecords.find((record) => record.fieldData?.airtablerecordid === id);
+
+    if (!webflowRecord) {
+      console.warn(`No matching Webflow record found for Airtable ID: ${id}`);
+      return res.status(404).json({ error: "No matching Webflow record found" });
+    }
+
+    // Compare fields
+    const updates = {};
+    if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
+      updates["number-of-seats"] = String(fields["Number of seats"]);
+    }
+    if (webflowRecord.fieldData["number-of-remaining-seats"] !== String(fields["Number of seats remaining"])) {
+      updates["number-of-remaining-seats"] = String(fields["Number of seats remaining"]);
+    }
+    if (webflowRecord.fieldData.name !== fields.Name) {
+      updates.name = fields.Name;
+    }
+    // Add additional comparisons for other fields as needed...
+
+    // If updates are needed, send them to Webflow
+    if (Object.keys(updates).length > 0) {
+      const updateURL = `${webflowBaseURL2}/${webflowRecord.id}/live`;
+      await axios.patch(updateURL, { fieldData: updates }, { headers: webflowHeaders2 });
+      console.log(`Updated Webflow record ID: ${webflowRecord.id}`);
+    } else {
+      console.log(`No updates needed for Webflow record ID: ${webflowRecord.id}`);
+    }
+
+    // Mark Airtable record as updated
+    await axios.patch(
+      `${airtableBaseURL}/${id}`,
+      { fields: { "Publish / Unpublish": "Updated" } },
+      { headers: airtableHeaders }
+    );
+    console.log(`Marked Airtable record ${id} as "Updated".`);
+
+    res.status(200).json({ message: "Sync completed successfully" });
+  } catch (error) {
+    console.error("Error syncing data:", error.response?.data || error.message);
+    res.status(500).json({ error: "Sync failed" });
+  }
+});
 
 // Airtable setup
 const base = new Airtable({ apiKey: AIRTABLE_API_KEY }).base(AIRTABLE_BASE_ID);
