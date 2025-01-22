@@ -931,7 +931,11 @@ async function processNewClasses() {
 //   res.status(200).json({ message: "Data received successfully" });
 // });
 
-
+// Define headers and base URLs
+const airtableBaseURL2 = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+const airtableHeaders2 = {
+  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+};
 
 
 const webflowBaseURL2 = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`;
@@ -981,9 +985,9 @@ app.post("/api/endpoint", async (req, res) => {
 
     // Mark Airtable record as updated
     await axios.patch(
-      `${airtableBaseURL}/${id}`,
+      `${airtableBaseURL2}/${id}`,
       { fields: { "Publish / Unpublish": "Updated" } },
-      { headers: airtableHeaders }
+      { headers: airtableHeaders2 }
     );
     console.log(`Marked Airtable record ${id} as "Updated".`);
 
