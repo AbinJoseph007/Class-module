@@ -1000,7 +1000,7 @@ app.post("/api/endpoint", async (req, res) => {
         updates["zip"] = fields["Zip (from Location 2)"].join(", ");
       }
       if (webflowRecord.fieldData["location"] !== fields["Local Association Name (from Location 2)"].join(", ")) {
-        updates["location"] = fields["Location"];
+        updates["location"] = fields["Local Association Name (from Location 2)"].join(", ");
       }
       if (webflowRecord.fieldData["description"] !== fields["Description"]) {
         updates["description"] = fields["Description"];
