@@ -944,7 +944,6 @@ const webflowHeaders2 = {
   "Content-Type": "application/json",
 };
 
-// Webhook endpoint
 app.post("/api/endpoint", async (req, res) => {
   const { id, fields } = req.body;
 
@@ -1006,13 +1005,20 @@ app.post("/api/endpoint", async (req, res) => {
       }
 
       // Handle related-classes field
-      const relatedClassIds = fields["Item Id (from Related Classes )"] || [];
-      const validRelatedClassIds = relatedClassIds.filter((id) =>
-        webflowRecords.some((record) => record._id === id)
-      );
+      const id1 = fields["Item Id (from Related Classes )"] || null;
+      const id2 = fields["Item Id 2 (from Related Classes )"] || null;
+      let newRelatedClassId = null;
 
-      if (validRelatedClassIds.length > 0) {
-        updates["related-classes"] = validRelatedClassIds;
+      // Check "member" field for determining the related class ID
+      const isMember = webflowRecord.fieldData["member"];
+      if (isMember === "Yes") {
+        newRelatedClassId = id1;
+      } else if (isMember === "No") {
+        newRelatedClassId = id2;
+      }
+
+      if (newRelatedClassId) {
+        updates["related-classes"] = newRelatedClassId;
       } else {
         console.warn(`Skipping related-classes update for Webflow record ID ${webflowRecord.id}`);
       }
@@ -1068,6 +1074,7 @@ app.post("/api/endpoint", async (req, res) => {
     res.status(500).json({ error: "Sync failed" });
   }
 });
+
 
 
 // Airtable setup
