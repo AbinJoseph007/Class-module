@@ -541,201 +541,201 @@ async function validateWebflowItemIds(itemIds) {
   }
 }
 
-// const airtableBaseURLs = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
-// const airtableHeaderss = {
-//   Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-// };
+const airtableBaseURLs = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
+const airtableHeaderss = {
+  Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+};
 
-// const webflowBaseURLs = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`;
-// const webflowHeaderss = {
-//   Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-//   "Content-Type": "application/json",
-// };
-// async function syncRemainingSeats() {
-//   try {
-//     // Fetch Airtable data
-//     const airtableResponse = await axios.get(airtableBaseURLs, { headers: airtableHeaderss });
-//     const airtableRecords = airtableResponse.data.records;
+const webflowBaseURLs = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`;
+const webflowHeaderss = {
+  Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+  "Content-Type": "application/json",
+};
+async function syncRemainingSeats() {
+  try {
+    // Fetch Airtable data
+    const airtableResponse = await axios.get(airtableBaseURLs, { headers: airtableHeaderss });
+    const airtableRecords = airtableResponse.data.records;
 
-//     console.log(`Fetched ${airtableRecords.length} records from Airtable.`);
+    console.log(`Fetched ${airtableRecords.length} records from Airtable.`);
 
-//     // Fetch Webflow data
-//     let webflowRecords = [];
-//     try {
-//       const webflowResponse = await axios.get(webflowBaseURLs, { headers: webflowHeaderss });
-//       webflowRecords = webflowResponse.data.items || [];
-//       console.log(`Fetched ${webflowRecords.length} records from Webflow.`);
-//     } catch (webflowError) {
-//       console.error("Error fetching records from Webflow:", webflowError.response?.data || webflowError.message);
-//       return;
-//     }
+    // Fetch Webflow data
+    let webflowRecords = [];
+    try {
+      const webflowResponse = await axios.get(webflowBaseURLs, { headers: webflowHeaderss });
+      webflowRecords = webflowResponse.data.items || [];
+      console.log(`Fetched ${webflowRecords.length} records from Webflow.`);
+    } catch (webflowError) {
+      console.error("Error fetching records from Webflow:", webflowError.response?.data || webflowError.message);
+      return;
+    }
 
-//     // Create a map of Webflow records by Airtable ID
-//     const webflowRecordMap = new Map();
-//     webflowRecords.forEach((record) => {
-//       const airtableId = record.fieldData["airtablerecordid"];
-//       if (airtableId) {
-//         if (!webflowRecordMap.has(airtableId)) {
-//           webflowRecordMap.set(airtableId, []);
-//         }
-//         webflowRecordMap.get(airtableId).push(record);
-//       }
-//     });
+    // Create a map of Webflow records by Airtable ID
+    const webflowRecordMap = new Map();
+    webflowRecords.forEach((record) => {
+      const airtableId = record.fieldData["airtablerecordid"];
+      if (airtableId) {
+        if (!webflowRecordMap.has(airtableId)) {
+          webflowRecordMap.set(airtableId, []);
+        }
+        webflowRecordMap.get(airtableId).push(record);
+      }
+    });
 
-//     // Always sync `number-of-remaining-seats`
-//     for (const airtableRecord of airtableRecords) {
-//       const airtableId = airtableRecord.id;
-//       const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
-//       const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
+    // Always sync `number-of-remaining-seats`
+    for (const airtableRecord of airtableRecords) {
+      const airtableId = airtableRecord.id;
+      const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
+      const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
 
-//       if (webflowRecordsToUpdate) {
-//         for (const webflowRecord of webflowRecordsToUpdate) {
-//           const webflowSeatsRemaining = webflowRecord.fieldData["number-of-remaining-seats"];
-//           if (String(webflowSeatsRemaining) !== String(airtableSeatsRemaining)) {
-//             const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
-//             const updateData = {
-//               fieldData: {
-//                 "number-of-remaining-seats": String(airtableSeatsRemaining),
-//               },
-//             };
-//             try {
-//               await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
-//               console.log(`Updated number-of-remaining-seats for Webflow record ID ${webflowRecord.id}.`);
-//             } catch (error) {
-//               console.error(
-//                 `Error updating number-of-remaining-seats for Webflow record ID ${webflowRecord.id}:`,
-//                 error.response?.data || error.message
-//               );
-//             }
-//           }
-//         }
-//       }
-//     }
+      if (webflowRecordsToUpdate) {
+        for (const webflowRecord of webflowRecordsToUpdate) {
+          const webflowSeatsRemaining = webflowRecord.fieldData["number-of-remaining-seats"];
+          if (String(webflowSeatsRemaining) !== String(airtableSeatsRemaining)) {
+            const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
+            const updateData = {
+              fieldData: {
+                "number-of-remaining-seats": String(airtableSeatsRemaining),
+              },
+            };
+            try {
+              await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
+              console.log(`Updated number-of-remaining-seats for Webflow record ID ${webflowRecord.id}.`);
+            } catch (error) {
+              console.error(
+                `Error updating number-of-remaining-seats for Webflow record ID ${webflowRecord.id}:`,
+                error.response?.data || error.message
+              );
+            }
+          }
+        }
+      }
+    }
 
-//     // Filter Airtable records where Publish / Unpublish is "Update"
-//     const recordsToSync = airtableRecords.filter(
-//       (record) => record.fields["Publish / Unpublish"] === "Update"
-//     );
+    // Filter Airtable records where Publish / Unpublish is "Update"
+    const recordsToSync = airtableRecords.filter(
+      (record) => record.fields["Publish / Unpublish"] === "Update"
+    );
 
-//     for (const airtableRecord of recordsToSync) {
-//       const airtableId = airtableRecord.id;
-//       const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
-//       const numberOfSeats = airtableRecord.fields["Number of seats"];
-//       const nameofclass = airtableRecord.fields["Name"];
-//       const roi = airtableRecord.fields["Price - ROII Participants (Select)"];
-//       const starttime = airtableRecord.fields["Start Time"];
-//       const endtime = airtableRecord.fields["End Time"];
-//       const startdate = airtableRecord.fields["Date"];
-//       const enddate = airtableRecord.fields["End date"];
-//       // const sortorder = airtableRecord.fields["Sort order"]
-//       const zipcode = (airtableRecord.fields["zip"] || []).join(", ")
-//       const location = (airtableRecord.fields["Local Association Name (from Location 2)"] || []).join(", ")
-//       const Description = airtableRecord.fields["Description"];
-//       const producttype = airtableRecord.fields["Product Type"];
-//       const id1 = airtableRecord.fields["Item Id (from Related Classes )"] || null;
-//       const id2 = airtableRecord.fields["Item Id 2 (from Related Classes )"] || null;
-//       const instructname = (airtableRecord.fields["Instructor Name (from Instructors)"] || []).join(", ");
-//       const instructcompany = (airtableRecord.fields["Instructor Company (from Instructors)"] || []).join(", ");
-//       const instructdetails = (airtableRecord.fields["Instructor Details (from Instructors)"] || []).join(", ");
+    for (const airtableRecord of recordsToSync) {
+      const airtableId = airtableRecord.id;
+      const airtableSeatsRemaining = airtableRecord.fields["Number of seats remaining"];
+      const numberOfSeats = airtableRecord.fields["Number of seats"];
+      const nameofclass = airtableRecord.fields["Name"];
+      const roi = airtableRecord.fields["Price - ROII Participants (Select)"];
+      const starttime = airtableRecord.fields["Start Time"];
+      const endtime = airtableRecord.fields["End Time"];
+      const startdate = airtableRecord.fields["Date"];
+      const enddate = airtableRecord.fields["End date"];
+      // const sortorder = airtableRecord.fields["Sort order"]
+      const zipcode = (airtableRecord.fields["zip"] || []).join(", ")
+      const location = (airtableRecord.fields["Local Association Name (from Location 2)"] || []).join(", ")
+      const Description = airtableRecord.fields["Description"];
+      const producttype = airtableRecord.fields["Product Type"];
+      const id1 = airtableRecord.fields["Item Id (from Related Classes )"] || null;
+      const id2 = airtableRecord.fields["Item Id 2 (from Related Classes )"] || null;
+      const instructname = (airtableRecord.fields["Instructor Name (from Instructors)"] || []).join(", ");
+      const instructcompany = (airtableRecord.fields["Instructor Company (from Instructors)"] || []).join(", ");
+      const instructdetails = (airtableRecord.fields["Instructor Details (from Instructors)"] || []).join(", ");
 
-//       const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
+      const webflowRecordsToUpdate = webflowRecordMap.get(airtableId);
 
-//       if (!webflowRecordsToUpdate || webflowRecordsToUpdate.length === 0) {
-//         console.log(`No matching Webflow records found for Airtable ID: ${airtableId}`);
-//         continue;
-//       }
+      if (!webflowRecordsToUpdate || webflowRecordsToUpdate.length === 0) {
+        console.log(`No matching Webflow records found for Airtable ID: ${airtableId}`);
+        continue;
+      }
 
-//       for (const webflowRecord of webflowRecordsToUpdate) {
-//         let isMember = webflowRecord.fieldData["member"];
+      for (const webflowRecord of webflowRecordsToUpdate) {
+        let isMember = webflowRecord.fieldData["member"];
 
-//         if (isMember === undefined || (isMember !== "Yes" && isMember !== "No")) {
-//           console.warn(`Webflow record ${webflowRecord.id} has an invalid "member" value: "${isMember}"`);
-//           isMember = null;
-//         }
+        if (isMember === undefined || (isMember !== "Yes" && isMember !== "No")) {
+          console.warn(`Webflow record ${webflowRecord.id} has an invalid "member" value: "${isMember}"`);
+          isMember = null;
+        }
 
-//         let newRelatedClassId = null;
-//         if (isMember === "Yes") {
-//           newRelatedClassId = id1;
-//         } else if (isMember === "No") {
-//           newRelatedClassId = id2;
-//         }
+        let newRelatedClassId = null;
+        if (isMember === "Yes") {
+          newRelatedClassId = id1;
+        } else if (isMember === "No") {
+          newRelatedClassId = id2;
+        }
 
-//         const hasDifferences =
-//           String(webflowRecord.fieldData["number-of-seats"]) !== String(numberOfSeats) ||
-//           String(webflowRecord.fieldData["name"]) !== String(nameofclass) ||
-//           String(webflowRecord.fieldData["price-roii-participants"]) !== String(roi) ||
-//           String(webflowRecord.fieldData["start-time"]) !== String(starttime) ||
-//           String(webflowRecord.fieldData["end-time"]) !== String(endtime) ||
-//           String(webflowRecord.fieldData["date"]) !== String(startdate)||
-//           String(webflowRecord.fieldData["end-date"]) !== String(enddate) ||
-//           // String(webflowRecord.fieldData["sort-order"]) !== String(sortorder) ||
-//           String(webflowRecord.fieldData["zip"]) !== String(zipcode) ||
-//           String(webflowRecord.fieldData["location"]) !== String(location) ||
-//           String(webflowRecord.fieldData["description"]) !== String(Description) ||
-//           String(webflowRecord.fieldData["related-classes"] || null) !== String(newRelatedClassId || null) ||
-//           String(webflowRecord.fieldData["instructor-name"]) !== String(instructname) ||
-//           String(webflowRecord.fieldData["instructor-company"]) !== String(instructcompany) ||
-//           String(webflowRecord.fieldData["instructor-details"]) !== String(instructdetails) ||
-//           String(webflowRecord.fieldData["class-type"]) !== String(producttype);
+        const hasDifferences =
+          String(webflowRecord.fieldData["number-of-seats"]) !== String(numberOfSeats) ||
+          String(webflowRecord.fieldData["name"]) !== String(nameofclass) ||
+          String(webflowRecord.fieldData["price-roii-participants"]) !== String(roi) ||
+          String(webflowRecord.fieldData["start-time"]) !== String(starttime) ||
+          String(webflowRecord.fieldData["end-time"]) !== String(endtime) ||
+          String(webflowRecord.fieldData["date"]) !== String(startdate)||
+          String(webflowRecord.fieldData["end-date"]) !== String(enddate) ||
+          // String(webflowRecord.fieldData["sort-order"]) !== String(sortorder) ||
+          String(webflowRecord.fieldData["zip"]) !== String(zipcode) ||
+          String(webflowRecord.fieldData["location"]) !== String(location) ||
+          String(webflowRecord.fieldData["description"]) !== String(Description) ||
+          String(webflowRecord.fieldData["related-classes"] || null) !== String(newRelatedClassId || null) ||
+          String(webflowRecord.fieldData["instructor-name"]) !== String(instructname) ||
+          String(webflowRecord.fieldData["instructor-company"]) !== String(instructcompany) ||
+          String(webflowRecord.fieldData["instructor-details"]) !== String(instructdetails) ||
+          String(webflowRecord.fieldData["class-type"]) !== String(producttype);
 
-//         if (hasDifferences) {
-//           const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
-//           const updateData = {
-//             fieldData: {
-//               "number-of-seats": String(numberOfSeats),
-//               name: nameofclass,
-//               "price-roii-participants": String(roi),
-//               "start-time": starttime,
-//               "end-time": endtime,
-//               location: location,
-//               description: Description,
-//               "related-classes": newRelatedClassId || null,
-//               "instructor-name": instructname,
-//               "instructor-company": instructcompany,
-//               "instructor-details": instructdetails,
-//               "class-type": producttype,
-//               "end-date":enddate,
-//               "date":startdate,
-//               "zip":zipcode,
-//               // "sort-order": String(sortorder) || null
-//               "class-delete-2":"updated"
-//             },
-//           };
+        if (hasDifferences) {
+          const updateURL = `${webflowBaseURLs}/${webflowRecord.id}/live`;
+          const updateData = {
+            fieldData: {
+              "number-of-seats": String(numberOfSeats),
+              name: nameofclass,
+              "price-roii-participants": String(roi),
+              "start-time": starttime,
+              "end-time": endtime,
+              location: location,
+              description: Description,
+              "related-classes": newRelatedClassId || null,
+              "instructor-name": instructname,
+              "instructor-company": instructcompany,
+              "instructor-details": instructdetails,
+              "class-type": producttype,
+              "end-date":enddate,
+              "date":startdate,
+              "zip":zipcode,
+              // "sort-order": String(sortorder) || null
+              "class-delete-2":"updated"
+            },
+          };
 
-//           try {
-//             await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
-//             console.log(`Successfully updated Webflow record for Airtable ID ${airtableId}.`);
-//           } catch (updateError) {
-//             console.error(
-//               `Error updating Webflow record for Airtable ID ${airtableId}:`,
-//               updateError.response?.data || updateError.message
-//             );
-//           }
-//         }
-//       }
+          try {
+            await axios.patch(updateURL, updateData, { headers: webflowHeaderss });
+            console.log(`Successfully updated Webflow record for Airtable ID ${airtableId}.`);
+          } catch (updateError) {
+            console.error(
+              `Error updating Webflow record for Airtable ID ${airtableId}:`,
+              updateError.response?.data || updateError.message
+            );
+          }
+        }
+      }
 
-//       // Mark Airtable record as "Updated"
-//       try {
-//         await axios.patch(
-//           `${airtableBaseURLs}/${airtableId}`,
-//           { fields: { "Publish / Unpublish": "Updated" } },
-//           { headers: airtableHeaderss }
-//         );
-//         console.log(`Marked Airtable record ${airtableId} as "Updated".`);
-//       } catch (airtableError) {
-//         console.error(
-//           `Error marking Airtable record ${airtableId} as "Updated":`,
-//           airtableError.response?.data || airtableError.message
-//         );
-//       }
-//     }
-//   } catch (error) {
-//     console.error("Error syncing data:", error.response?.data || error.message);
-//   }
-// }
+      // Mark Airtable record as "Updated"
+      try {
+        await axios.patch(
+          `${airtableBaseURLs}/${airtableId}`,
+          { fields: { "Publish / Unpublish": "Updated" } },
+          { headers: airtableHeaderss }
+        );
+        console.log(`Marked Airtable record ${airtableId} as "Updated".`);
+      } catch (airtableError) {
+        console.error(
+          `Error marking Airtable record ${airtableId} as "Updated":`,
+          airtableError.response?.data || airtableError.message
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Error syncing data:", error.response?.data || error.message);
+  }
+}
 
-// // Run the sync function
-// syncRemainingSeats();
+// Run the sync function
+syncRemainingSeats();
 
 
 // async function runPeriodicallyw(intervalMs) {
@@ -921,14 +921,72 @@ async function processNewClasses() {
 
 
 
-app.post("/api/endpoint", (req, res) => {
+// app.post("/api/endpoint", (req, res) => {
+//   const { id, fields } = req.body;
+
+//   // Log or process the received data
+//   console.log("Received data:", { id, fields });
+
+//   // Send a response
+//   res.status(200).json({ message: "Data received successfully" });
+// });
+
+
+
+
+const webflowBaseURL2 = `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items`;
+const webflowHeaders2 = {
+  Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+  "Content-Type": "application/json",
+};
+
+app.post("/api/endpoint", async (req, res) => {
   const { id, fields } = req.body;
 
-  // Log or process the received data
-  console.log("Received data:", { id, fields });
+  try {
+    // Log the incoming data
+    console.log("Received data from Airtable:", { id, fields });
 
-  // Send a response
-  res.status(200).json({ message: "Data received successfully" });
+    // Map Airtable fields to Webflow fields
+    const webflowData = {
+      "name": fields.Name,
+      "description": fields.Description,
+      "date": fields.Date,
+      "end-date": fields["End date"],
+      "start-time": fields["Start Time"],
+      "end-time": fields["End Time"],
+      "price-member": fields["Price - Member"],
+      "price-non-member": fields["Price - Non Member"],
+      "location": fields.Location?.map((loc) => loc.name).join(", "),
+      "zip": fields["Zip (from Location 2)"]?.join(", "),
+      "instructor-name": fields["Instructor Name (from Instructors)"]?.join(", "),
+      "instructor-company": fields["Instructor Company (from Instructors)"]?.join(", "),
+      "number-of-seats": fields["Number of seats"],
+      "number-of-seats-remaining": fields["Number of seats remaining"],
+      "related-classes": fields["Item Id (from Related Classes )"]?.[0] || null,
+      "banner-image": fields["Banner image"]?.[0]?.url || null,
+    };
+
+    // Check if the Webflow record exists
+    const webflowResponse = await axios.get(webflowBaseURL2, { headers: webflowHeaders2 });
+    const webflowRecords = webflowResponse.data.items || [];
+    const existingRecord = webflowRecords.find((record) => record["airtablerecordid"] === id);
+
+    if (existingRecord) {
+      // Update the existing record
+      const updateURL = `${webflowBaseURL2}/${existingRecord.id}/live`;
+      await axios.patch(updateURL, { fieldData: webflowData }, { headers: webflowHeaders2 });
+      console.log(`Updated Webflow record with Airtable ID: ${id}`);
+    } else {
+      // Optionally, create a new Webflow record if it doesn't exist
+      console.warn(`No Webflow record found for Airtable ID: ${id}`);
+    }
+
+    res.status(200).json({ message: "Webflow updated successfully" });
+  } catch (error) {
+    console.error("Error updating Webflow:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to update Webflow" });
+  }
 });
 
 
