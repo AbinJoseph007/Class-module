@@ -963,14 +963,18 @@ app.post("/api/endpoint", async (req, res) => {
       return res.status(404).json({ error: "No matching Webflow records found" });
     }
 
+    // Iterate over matching Webflow records
     for (const webflowRecord of matchingWebflowRecords) {
       const updates = {};
 
-      // Map Airtable fields to Webflow fields and compare
+      // Compare and update fields
       if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
         updates["number-of-seats"] = String(fields["Number of seats"]);
       }
-      if (webflowRecord.fieldData["number-of-remaining-seats"] !== String(fields["Number of seats remaining"])) {
+      if (
+        webflowRecord.fieldData["number-of-remaining-seats"] !==
+        String(fields["Number of seats remaining"])
+      ) {
         updates["number-of-remaining-seats"] = String(fields["Number of seats remaining"]);
       }
       if (webflowRecord.fieldData.name !== fields.Name) {
@@ -985,57 +989,66 @@ app.post("/api/endpoint", async (req, res) => {
       if (webflowRecord.fieldData["end-time"] !== fields["End Time"]) {
         updates["end-time"] = fields["End Time"];
       }
-      if (webflowRecord.fieldData.location !== (fields["Local Association Name (from Location 2)"] || []).join(", ")) {
-        updates.location = (fields["Local Association Name (from Location 2)"] || []).join(", ");
-      }
-      if (webflowRecord.fieldData.description !== fields.Description) {
-        updates.description = fields.Description;
-      }
-      if (
-        webflowRecord.fieldData["related-classes"] !==
-        (fields["Item Id (from Related Classes )"] || []).join(", ")
-      ) {
-        updates["related-classes"] = (fields["Item Id (from Related Classes )"] || []).join(", ");
-      }
-      if (webflowRecord.fieldData["instructor-name"] !== (fields["Instructor Name (from Instructors)"] || []).join(", ")) {
-        updates["instructor-name"] = (fields["Instructor Name (from Instructors)"] || []).join(", ");
-      }
-      if (
-        webflowRecord.fieldData["instructor-company"] !==
-        (fields["Instructor Company (from Instructors)"] || []).join(", ")
-      ) {
-        updates["instructor-company"] = (fields["Instructor Company (from Instructors)"] || []).join(", ");
-      }
-      if (
-        webflowRecord.fieldData["instructor-details"] !==
-        (fields["Instructor Details (from Instructors)"] || []).join(", ")
-      ) {
-        updates["instructor-details"] = (fields["Instructor Details (from Instructors)"] || []).join(", ");
-      }
-      if (webflowRecord.fieldData["class-type"] !== fields["Product Type"].name) {
-        updates["class-type"] = fields["Product Type"].name;
+      if (webflowRecord.fieldData["date"] !== fields["Date"]) {
+        updates["date"] = fields["Date"];
       }
       if (webflowRecord.fieldData["end-date"] !== fields["End date"]) {
         updates["end-date"] = fields["End date"];
       }
-      if (webflowRecord.fieldData.date !== fields.Date) {
-        updates.date = fields.Date;
+      if (webflowRecord.fieldData["zip"] !== fields["Zip (from Location 2)"].join(", ")) {
+        updates["zip"] = fields["Zip (from Location 2)"].join(", ");
       }
-      if (webflowRecord.fieldData.zip !== (fields["Zip (from Location 2)"] || []).join(", ")) {
-        updates.zip = (fields["Zip (from Location 2)"] || []).join(", ");
+      if (webflowRecord.fieldData["location"] !== fields["Location"]) {
+        updates["location"] = fields["Location"];
       }
-      if (webflowRecord.fieldData["sort-order"] !== String(fields["Sort order"])) {
-        updates["sort-order"] = String(fields["Sort order"]);
-      }
-      if (webflowRecord.fieldData["class-delete-2"] !== "updated") {
-        updates["class-delete-2"] = "updated";
+      if (webflowRecord.fieldData["description"] !== fields["Description"]) {
+        updates["description"] = fields["Description"];
       }
 
-      // If updates are needed, send them to Webflow
+      // Handle related-classes field
+      const relatedClassIds = fields["Item Id (from Related Classes )"] || [];
+      const validRelatedClassIds = relatedClassIds.filter((id) =>
+        webflowRecords.some((record) => record._id === id)
+      );
+
+      if (validRelatedClassIds.length > 0) {
+        updates["related-classes"] = validRelatedClassIds;
+      } else {
+        console.warn(`Skipping related-classes update for Webflow record ID ${webflowRecord.id}`);
+      }
+
+      // Instructor details
+      const instructname = fields["Instructor Name (from Instructors)"]?.join(", ");
+      const instructcompany = fields["Instructor Company (from Instructors)"]?.join(", ");
+      const instructdetails = fields["Instructor Details (from Instructors)"]?.join(", ");
+      if (webflowRecord.fieldData["instructor-name"] !== instructname) {
+        updates["instructor-name"] = instructname;
+      }
+      if (webflowRecord.fieldData["instructor-company"] !== instructcompany) {
+        updates["instructor-company"] = instructcompany;
+      }
+      if (webflowRecord.fieldData["instructor-details"] !== instructdetails) {
+        updates["instructor-details"] = instructdetails;
+      }
+
+      // Product type
+      const producttype = fields["Product Type"]?.name;
+      if (webflowRecord.fieldData["class-type"] !== producttype) {
+        updates["class-type"] = producttype;
+      }
+
+      // If there are updates, send them to Webflow
       if (Object.keys(updates).length > 0) {
         const updateURL = `${webflowBaseURL2}/${webflowRecord.id}/live`;
-        await axios.patch(updateURL, { fieldData: updates }, { headers: webflowHeaders2 });
-        console.log(`Updated Webflow record ID: ${webflowRecord.id}`);
+        try {
+          await axios.patch(updateURL, { fieldData: updates }, { headers: webflowHeaders2 });
+          console.log(`Updated Webflow record ID: ${webflowRecord.id}`);
+        } catch (updateError) {
+          console.error(
+            `Error updating Webflow record ID ${webflowRecord.id}:`,
+            updateError.response?.data || updateError.message
+          );
+        }
       } else {
         console.log(`No updates needed for Webflow record ID: ${webflowRecord.id}`);
       }
