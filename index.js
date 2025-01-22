@@ -1031,7 +1031,7 @@ const webflowHeaders2 = {
   Authorization: `Bearer ${WEBFLOW_API_KEY}`,
   "Content-Type": "application/json",
 };
-
+//update class webhook
 app.post("/api/endpoint", async (req, res) => {
   const { id, fields } = req.body;
 
