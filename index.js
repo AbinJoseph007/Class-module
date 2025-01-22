@@ -1680,7 +1680,7 @@ async function syncAirtableToWebflow() {
         }
       }
 
-      console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
+      // console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
 
       const webflowData = {
         fieldData: {
