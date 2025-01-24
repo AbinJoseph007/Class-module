@@ -1371,7 +1371,8 @@ app.post('/submit-class', async (req, res) => {
     const paymentRecord = {
       "Name": SignedMemberName,
       "Email": signedmemberemail,
-      "Client ID": fields['field-2'],
+      // "Client ID": fields['field-2'], //User ID
+      "User ID": fields['field-2'],
       "Airtable id": fields['airtable-id'],
       "Client name": SignedMemberName,
       "Payment Status": "Pending",
