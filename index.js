@@ -1499,11 +1499,13 @@ app.post('/submit-class', async (req, res) => {
       const phone = fields[`P${i}-Phone-number`] || fields[`P${i}-Phone-Number`];
       const airID = fields['airtable-id']; 
 
+
       if (!name && !email && !phone) continue;
 
       const seatRecord = {
         "Name": name || "",
-        // "Email": email || "",
+        // Uncomment the line below if "Email" is required in the seat records
+        "Email": email || "",
         "Phone Number": phone || "",
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
@@ -1513,7 +1515,7 @@ app.post('/submit-class', async (req, res) => {
 
       // Create Seat Record in Airtable
       const createdSeatRecord = await airtable
-        .base(AIRTABLE_BASE_ID)("Biaw Classes")
+        .base(AIRTABLE_BASE_ID)("Biaw Classes") // Verify if this is the correct table
         .create(seatRecord);
 
       seatRecords.push(seatRecord);
@@ -1524,7 +1526,8 @@ app.post('/submit-class', async (req, res) => {
     // Create Payment Record in Airtable
     const paymentRecord = {
       "Name": SignedMemberName,
-    //  "Email": signedmemberemail,
+      // Uncomment the line below if "Email" is required in the payment record
+      "Email": signedmemberemail,
       "User ID": [validMemberId], // Airtable record ID for the Member
       "Airtable id": airID,
       "Client name": SignedMemberName,
