@@ -1503,7 +1503,7 @@ app.post('/submit-class', async (req, res) => {
 
       const seatRecord = {
         "Name": name || "",
-        "Email": email || "",
+        // "Email": email || "",
         "Phone Number": phone || "",
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
@@ -1524,7 +1524,7 @@ app.post('/submit-class', async (req, res) => {
     // Create Payment Record in Airtable
     const paymentRecord = {
       "Name": SignedMemberName,
-      "Email": signedmemberemail,
+    //  "Email": signedmemberemail,
       "User ID": [validMemberId], // Airtable record ID for the Member
       "Airtable id": airID,
       "Client name": SignedMemberName,
