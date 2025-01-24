@@ -1449,48 +1449,52 @@ app.post('/submit-class', async (req, res) => {
       return res.status(400).send({ message: 'Invalid price ID or seat count.' });
     }
 
-    // Calculate the total payment
     const totalPayment = numberOfSeats * parseFloat(fields.pricePerSeat || 0);
     if (totalPayment <= 0) {
       return res.status(400).send({ message: 'Invalid total payment amount.' });
     }
 
-    // Initialize variables
+    // Validate User ID (field-2) linked to Members table
+    const userId = fields['field-2'];
+    if (!userId) {
+      return res.status(400).send({ message: "User ID is required and must be a valid Member record ID." });
+    }
+
+    const memberValidation = await airtable
+      .base(AIRTABLE_BASE_ID)("Members")
+      .find(userId)
+      .catch(() => null);
+
+    if (!memberValidation) {
+      return res.status(400).send({ message: `Invalid User ID: ${userId}. No matching record found in the Members table.` });
+    }
+
+    // Fetch Biaw Class ID
+    const airID = fields['airtable-id'];
+    const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+      .select({
+        filterByFormula: `{Field ID} = '${airID}'`,
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (biawClassesTables.length === 0) {
+      return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+    }
+    const biawClassId = biawClassesTables[0].id;
+
+    // Process Participants (P1 to P10)
     const seatRecords = [];
     const seatRecordIds = [];
     let seatCount = 0;
-    let biawClassId = null;
 
-    // Process participants (P1 to P10)
     for (let i = 1; i <= 10; i++) {
       const name = fields[`P${i}-Name`];
       const email = fields[`P${i}-Email`];
       const phone = fields[`P${i}-Phone-number`] || fields[`P${i}-Phone-Number`];
-      const airID = fields['airtable-id'];
 
-      if (!name && !email && !phone) continue; // Skip empty participant entries
+      if (!name && !email && !phone) continue;
 
-      if (name) seatCount++; // Increment seat count if a participant name is provided
-
-      // Fetch class information from Airtable only once
-      if (!biawClassId) {
-        const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
-          .select({
-            filterByFormula: `{Field ID} = '${airID}'`,
-            maxRecords: 1,
-          })
-          .firstPage();
-
-        if (biawClassesTables.length === 0) {
-          console.error("No matching record found in Biaw Classes table");
-          return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
-        }
-
-        biawClassId = biawClassesTables[0].id;
-        console.log('Fetched Biaw Class ID:', biawClassId);
-      }
-
-      // Create seat record
       const seatRecord = {
         "Name": name || "",
         "Email": email || "",
@@ -1501,31 +1505,22 @@ app.post('/submit-class', async (req, res) => {
         "Biaw Classes": [biawClassId],
       };
 
+      // Create Seat Record in Airtable
+      const createdSeatRecord = await airtable
+        .base(AIRTABLE_BASE_ID)("Biaw Classes")
+        .create(seatRecord);
+
       seatRecords.push(seatRecord);
+      seatRecordIds.push(createdSeatRecord.id);
+      seatCount++;
     }
 
-    // Create seat records in Airtable
-    const createdRecords = [];
-    for (const record of seatRecords) {
-      const createdRecord = await airtable
-        .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME2)
-        .create(record);
-
-      createdRecords.push(createdRecord);
-      seatRecordIds.push(createdRecord.id); // Store the created record IDs
-    }
-
-    // Validate "User ID" (must be linked to Member table)
-    if (!fields['field-2']) {
-      return res.status(400).send({ message: "User ID is required and must be a valid Member record ID." });
-    }
-
-    // Create payment record in Airtable
+    // Create Payment Record in Airtable
     const paymentRecord = {
       "Name": SignedMemberName,
       "Email": signedmemberemail,
-      "User ID": [fields['field-2']], // Ensure this is an array of valid record IDs
-      "Airtable id": fields['airtable-id'],
+      "User ID": [userId],
+      "Airtable id": airID,
       "Client name": SignedMemberName,
       "Payment Status": "Pending",
       "Biaw Classes": [biawClassId],
@@ -1536,19 +1531,11 @@ app.post('/submit-class', async (req, res) => {
       "Purchased Class url": fields['class-url'],
     };
 
-    let paymentCreatedRecord;
-    try {
-      paymentCreatedRecord = await airtable
-        .base(AIRTABLE_BASE_ID)("Payment Records")
-        .create(paymentRecord);
+    const paymentCreatedRecord = await airtable
+      .base(AIRTABLE_BASE_ID)("Payment Records")
+      .create(paymentRecord);
 
-      console.log('Payment record created:', paymentCreatedRecord);
-    } catch (paymentError) {
-      console.error("Error adding to Payment Records:", paymentError);
-      return res.status(500).send({ message: "Error registering payment record", error: paymentError });
-    }
-
-    // Create Stripe Checkout session
+    // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
