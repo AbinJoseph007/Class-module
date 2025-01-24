@@ -2030,7 +2030,7 @@ async function syncAirtableToWebflow() {
           name: biawClassesDetails[0]?.Name || "",
           _archived: false,
           _draft: false,
-          "field-id":classFieldValue1,
+          "field-id":String(classFieldValue1),
           // "member-id": record.fields["Client ID"],
           "member-id": memberid,//new filed
           "mail-id": record.fields["Email"],
