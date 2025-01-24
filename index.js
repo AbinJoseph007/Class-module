@@ -1828,14 +1828,15 @@ async function syncAirtableToWebflow() {
       }
 
       // console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
-
+      const memberid = record.fields["Member ID (from User ID)"]?.[0] || "No details provided"; //new feild
       const webflowData = {
         fieldData: {
           name: biawClassesDetails[0]?.Name || "",
           _archived: false,
           _draft: false,
           "field-id": record.fields["Airtable id"],
-          "member-id": record.fields["Client ID"],
+          // "member-id": record.fields["Client ID"],
+          "member-id": memberid,//new filed
           "mail-id": record.fields["Email"],
           "total-amount": record.fields["Amount Total"] || "Free",
           "purchase-class-name": biawClassesDetails[0]?.Name || "",
