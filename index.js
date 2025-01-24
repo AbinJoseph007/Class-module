@@ -87,7 +87,8 @@ app.post('/webhook', async (req, res) => {
       // Proceed to update class and field data
       const lastRecord = matchingRecord; 
       const seatCount = parseInt(lastRecord.fields['Number of seat Purchased'], 10);
-      const classFieldValue = lastRecord.fields['Airtable id'];
+      // const classFieldValue = lastRecord.fields['Airtable id'];
+      const classFieldValue = lastRecord.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
       const multipleClassRegistrationIds = lastRecord.fields['Multiple Class Registration'] || [];
       const userEmail = lastRecord.fields['Email'];
       const userName = lastRecord.fields['Name'];
@@ -1882,7 +1883,7 @@ app.post('/register-class', async (req, res) => {
     const paymentRecord = {
       "Name": signName,
       "Email": signEmail,
-      "Client ID": memberid,
+      // "Client ID": memberid,
       "User ID": [validMemberId], // Airtable record ID for the validated Member
       "Airtable id": fields['airtable-id'],
       "Client name": signName,
