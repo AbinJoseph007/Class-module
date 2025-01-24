@@ -2023,12 +2023,14 @@ async function syncAirtableToWebflow() {
 
       // console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
       const memberid = record.fields["Member ID (from User ID)"]?.[0] || "No details provided"; //new feild
+      const classFieldValue = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
+
       const webflowData = {
         fieldData: {
           name: biawClassesDetails[0]?.Name || "",
           _archived: false,
           _draft: false,
-          "field-id": record.fields["Airtable id"],
+          "field-id":classFieldValue,
           // "member-id": record.fields["Client ID"],
           "member-id": memberid,//new filed
           "mail-id": record.fields["Email"],
