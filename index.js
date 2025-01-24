@@ -1454,20 +1454,25 @@ app.post('/submit-class', async (req, res) => {
       return res.status(400).send({ message: 'Invalid total payment amount.' });
     }
 
-    // Validate User ID (field-2) linked to Members table
+    // Validate "User ID" (field-2) against "Member ID" in the Members table
     const userId = fields['field-2'];
     if (!userId) {
-      return res.status(400).send({ message: "User ID is required and must be a valid Member record ID." });
+      return res.status(400).send({ message: "User ID is required and must be a valid Member ID." });
     }
 
     const memberValidation = await airtable
       .base(AIRTABLE_BASE_ID)("Members")
-      .find(userId)
-      .catch(() => null);
+      .select({
+        filterByFormula: `{Member ID} = '${userId}'`,
+        maxRecords: 1,
+      })
+      .firstPage();
 
-    if (!memberValidation) {
-      return res.status(400).send({ message: `Invalid User ID: ${userId}. No matching record found in the Members table.` });
+    if (memberValidation.length === 0) {
+      return res.status(400).send({ message: `Invalid Member ID: ${userId}. No matching record found in the Members table.` });
     }
+
+    const validMemberId = memberValidation[0].id; // Airtable record ID for the matched Member
 
     // Fetch Biaw Class ID
     const airID = fields['airtable-id'];
@@ -1519,7 +1524,7 @@ app.post('/submit-class', async (req, res) => {
     const paymentRecord = {
       "Name": SignedMemberName,
       "Email": signedmemberemail,
-      "User ID": [userId],
+      "User ID": [validMemberId], // Airtable record ID for the Member
       "Airtable id": airID,
       "Client name": SignedMemberName,
       "Payment Status": "Pending",
