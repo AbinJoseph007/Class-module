@@ -1582,17 +1582,209 @@ app.post('/submit-class', async (req, res) => {
   }
 });
 
+// app.post('/register-class', async (req, res) => {
+//   const { memberid, timestampField, ...fields } = req.body;
+
+//   try {
+//     const seatRecords = [];
+//     const seatRecordIds = [];
+//     const registeredNames = [];
+//     let seatCount = 0;
+
+//     // Loop through the submitted fields dynamically
+//     for (let i = 1; i <= 10; i++) { 
+//       const Rname = fields[`Roii-P-${i}-Name`];
+//       const Remail = fields[`Roii-P-${i}-Email`] || fields[`P${i}-Email-2`];
+//       const Rphone = fields[`Roii-P-${i}-Phone-Number`] || fields[`P${i}-Phone-Number-2`];
+//       const airID = fields['airtable-id'];
+
+//       // Skip empty seat data
+//       if (!Rname && !Remail && !Rphone) {
+//         continue;
+//       }
+
+//       // Increment seat count for non-empty names
+//       if (Rname) {
+//         seatCount++;
+//       }
+
+//       const biawClassesTables = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+//         .select({
+//           filterByFormula: `{Field ID} = ${airID}`,
+//           maxRecords: 1,
+//         })
+//         .firstPage();
+
+//       if (biawClassesTables.length === 0) {
+//         console.error("No matching record found in Biaw Classes table");
+//         return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+//       }
+
+//       const biawClassRecords = biawClassesTables[0];
+//       const biawClassIds = biawClassRecords.id;
+
+//       const seatRecord = {
+//         "Name": Rname || "",
+//         "Email": Remail || "",
+//         "Phone Number": Rphone || "",
+//         "Time Stamp": timestampField,
+//         "Purchased class Airtable ID": airID,
+//         "Biaw Classes": [biawClassIds],
+//         "Payment Status":"ROII Free"
+//       };
+
+//       seatRecords.push(seatRecord);
+//     }
+
+//     const createdRecords = [];
+//     for (const record of seatRecords) {
+//       const createdRecord = await airtable
+//         .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME2)
+//         .create(record);
+
+//       createdRecords.push(createdRecord);
+//       seatRecordIds.push(createdRecord.id);
+//       registeredNames.push(record["Name"]);
+//     }
+
+//     const biawClassesTable = await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes")
+//       .select({
+//         filterByFormula: `{Field ID} = '${fields['airtable-id']}'`,
+//         maxRecords: 1,
+//       })
+//       .firstPage();
+
+//     if (biawClassesTable.length === 0) {
+//       console.error("No matching record found in Biaw Classes table");
+//       return res.status(500).send({ message: "No matching class found for the provided Airtable ID." });
+//     }
+
+//     const biawClassRecord = biawClassesTable[0];
+//     const biawClassId = biawClassRecord.id;
+
+//     let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
+//     let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10);
+
+//     if (currentSeatsRemaining < seatCount) {
+//       return res.status(400).send({ message: "Not enough seats available for this class." });
+//     }
+
+//     const updatedSeatsRemaining = currentSeatsRemaining - seatCount;
+
+//     const updatedTotalPurchasedSeats = totalPurchasedSeats + seatCount;
+
+//     try {
+//       await airtable.base(AIRTABLE_BASE_ID)("Biaw Classes").update(biawClassId, {
+//         "Number of seats remaining": updatedSeatsRemaining.toString(),
+//         "Total Number of Purchased Seats": updatedTotalPurchasedSeats.toString(),
+//       });
+
+//       console.log(`Seats successfully updated. Remaining seats: ${updatedSeatsRemaining}, Total purchased seats: ${updatedTotalPurchasedSeats}`);
+//     } catch (updateError) {
+//       console.error("Error updating the seats:", updateError);
+//       return res.status(500).send({ message: "Error updating the seat information", error: updateError });
+//     }
+//     const signEmail = fields['roii-signedmemberemail'];
+//     const signName = fields["roii-signed-member-name"];
+
+//     const paymentRecord = {
+//       "Name": signName,
+//       "Email": signEmail,
+//       "Client ID": memberid,
+//       "Airtable id": fields['airtable-id'],
+//       "Client name": signName,
+//       "Payment Status": "ROII-Free",
+//       "Biaw Classes": [fields['airtable-id']],
+//       "Multiple Class Registration": seatRecordIds,
+//       "Number of seat Purchased": seatCount,
+//       "Biaw Classes": [biawClassId],
+//       "Booking Type": "User booked",
+//       "ROII member": "Yes",
+//       "Purchased Class url": fields["class-url-2"]
+
+
+//     };
+//     let paymentCreatedRecord;
+//     try {
+//       paymentCreatedRecord = await airtable
+//         .base(AIRTABLE_BASE_ID)("Payment Records")
+//         .create(paymentRecord);
+
+//         const transporter = nodemailer.createTransport({
+//           service: 'gmail',
+//           auth: {
+//             user: process.env.EMAIL_USER,
+//             pass: process.env.EMAIL_PASSWORD,
+//           },
+//         });
+    
+//         const userMailOptions = {
+//           from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+//           to: signEmail,
+//           subject: `Class Registration Confirmation for ${biawClassRecord.fields['Name']}`,
+//           html: `        
+//           <p>Hi ${signName},</p>
+//            <p>You have successfully registered for the class. Here are the details:</p>
+//           <p>Your registration for the class <strong>${biawClassRecord.fields['Name']}</strong> has been confirmed. Below are your details:</p>
+//           <p>description : ${biawClassRecord.fields['Description']}</p>
+//           <ul>
+//             <li>Number of Seats Purchased: ${seatCount}</li>
+//             <li>Location : ${biawClassRecord.fields['Location']}</li>
+//             <li>Class Url : ${fields["class-url-2"]}</li>
+//           </ul>
+//           <p>We look forward to seeing you in class!</p>
+//           <p>Best regards,<br>BIAW Customer Support Team</p>
+//         `,
+//         };
+    
+//         await transporter.sendMail(userMailOptions);
+
+//     } catch (paymentError) {
+//       console.error("Error adding to Payment Records:", paymentError);
+//       return res.status(500).send({ message: "Error registering payment record", error: paymentError });
+//     }
+
+//     res.status(200).send({
+//       message: "Class registered successfully",
+//       records: createdRecords,
+//       paymentRecord: paymentCreatedRecord,
+//     });
+//   } catch (error) {
+//     console.error("Error adding records to Airtable:", error);
+//     res.status(500).send({ message: "Error registering class", error: error });
+//   }
+// });
+
 app.post('/register-class', async (req, res) => {
   const { memberid, timestampField, ...fields } = req.body;
 
   try {
+    // Validate Member ID (ensure it exists in the "Members" table)
+    if (!memberid) {
+      return res.status(400).send({ message: "Member ID is required." });
+    }
+
+    const memberValidation = await airtable
+      .base(AIRTABLE_BASE_ID)("Members")
+      .select({
+        filterByFormula: `{Member ID} = '${memberid}'`,
+        maxRecords: 1,
+      })
+      .firstPage();
+
+    if (memberValidation.length === 0) {
+      return res.status(400).send({ message: `Invalid Member ID: ${memberid}. No matching record found in the Members table.` });
+    }
+
+    const validMemberId = memberValidation[0].id; // Airtable record ID for the matched Member
+
     const seatRecords = [];
     const seatRecordIds = [];
     const registeredNames = [];
     let seatCount = 0;
 
     // Loop through the submitted fields dynamically
-    for (let i = 1; i <= 10; i++) { 
+    for (let i = 1; i <= 10; i++) {
       const Rname = fields[`Roii-P-${i}-Name`];
       const Remail = fields[`Roii-P-${i}-Email`] || fields[`P${i}-Email-2`];
       const Rphone = fields[`Roii-P-${i}-Phone-Number`] || fields[`P${i}-Phone-Number-2`];
@@ -1630,7 +1822,7 @@ app.post('/register-class', async (req, res) => {
         "Time Stamp": timestampField,
         "Purchased class Airtable ID": airID,
         "Biaw Classes": [biawClassIds],
-        "Payment Status":"ROII Free"
+        "Payment Status": "ROII Free"
       };
 
       seatRecords.push(seatRecord);
@@ -1691,6 +1883,7 @@ app.post('/register-class', async (req, res) => {
       "Name": signName,
       "Email": signEmail,
       "Client ID": memberid,
+      "User ID": [validMemberId], // Airtable record ID for the validated Member
       "Airtable id": fields['airtable-id'],
       "Client name": signName,
       "Payment Status": "ROII-Free",
@@ -1701,28 +1894,27 @@ app.post('/register-class', async (req, res) => {
       "Booking Type": "User booked",
       "ROII member": "Yes",
       "Purchased Class url": fields["class-url-2"]
-
-
     };
+
     let paymentCreatedRecord;
     try {
       paymentCreatedRecord = await airtable
         .base(AIRTABLE_BASE_ID)("Payment Records")
         .create(paymentRecord);
 
-        const transporter = nodemailer.createTransport({
-          service: 'gmail',
-          auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASSWORD,
-          },
-        });
-    
-        const userMailOptions = {
-          from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
-          to: signEmail,
-          subject: `Class Registration Confirmation for ${biawClassRecord.fields['Name']}`,
-          html: `        
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASSWORD,
+        },
+      });
+
+      const userMailOptions = {
+        from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
+        to: signEmail,
+        subject: `Class Registration Confirmation for ${biawClassRecord.fields['Name']}`,
+        html: `
           <p>Hi ${signName},</p>
            <p>You have successfully registered for the class. Here are the details:</p>
           <p>Your registration for the class <strong>${biawClassRecord.fields['Name']}</strong> has been confirmed. Below are your details:</p>
@@ -1735,9 +1927,9 @@ app.post('/register-class', async (req, res) => {
           <p>We look forward to seeing you in class!</p>
           <p>Best regards,<br>BIAW Customer Support Team</p>
         `,
-        };
-    
-        await transporter.sendMail(userMailOptions);
+      };
+
+      await transporter.sendMail(userMailOptions);
 
     } catch (paymentError) {
       console.error("Error adding to Payment Records:", paymentError);
@@ -1754,6 +1946,7 @@ app.post('/register-class', async (req, res) => {
     res.status(500).send({ message: "Error registering class", error: error });
   }
 });
+
 
 const airtableBase = new Airtable({ apiKey: process.env.AIRTABLE_API_KEY }).base(process.env.AIRTABLE_BASE_ID);
 
