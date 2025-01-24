@@ -1497,6 +1497,7 @@ app.post('/submit-class', async (req, res) => {
       const name = fields[`P${i}-Name`];
       const email = fields[`P${i}-Email`];
       const phone = fields[`P${i}-Phone-number`] || fields[`P${i}-Phone-Number`];
+      const airID = fields['airtable-id']; 
 
       if (!name && !email && !phone) continue;
 
