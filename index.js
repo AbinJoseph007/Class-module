@@ -1372,7 +1372,7 @@ app.post('/submit-class', async (req, res) => {
       "Name": SignedMemberName,
       "Email": signedmemberemail,
       // "Client ID": fields['field-2'], //User ID
-      "User ID": fields['field-2'],
+      "User ID": [fields['field-2']], // Ensure this is an array of record IDs
       "Airtable id": fields['airtable-id'],
       "Client name": SignedMemberName,
       "Payment Status": "Pending",
