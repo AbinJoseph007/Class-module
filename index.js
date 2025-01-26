@@ -1175,12 +1175,12 @@ app.post("/api/endpoint", async (req, res) => {
     }
 
     // Mark Airtable record as updated
-    await axios.patch(
-      `${airtableBaseURL2}/${id}`,
-      { fields: { "Publish / Unpublish": "Updated" } },
-      { headers: airtableHeaders2 }
-    );
-    console.log(`Marked Airtable record ${id} as "Updated".`);
+    // await axios.patch(
+    //   `${airtableBaseURL2}/${id}`,
+    //   { fields: { "Publish / Unpublish": "Updated" } },
+    //   { headers: airtableHeaders2 }
+    // );
+    // console.log(`Marked Airtable record ${id} as "Updated".`);
 
     res.status(200).json({ message: "Sync completed successfully" });
   } catch (error) {
