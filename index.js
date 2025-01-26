@@ -1062,13 +1062,13 @@ app.post("/api/endpoint", async (req, res) => {
 
       // Extract images from Airtable
       const airtableImages = fields["Images"]?.map((imageObj) => imageObj.url) || [];
-      const webflowImages = webflowRecord.fieldData["image-2"] || [];
+      const webflowImages = webflowRecord.fieldData["main-images"] || [];
       const imagesAreDifferent =
         airtableImages.length !== webflowImages.length ||
         airtableImages.some((image, index) => image !== webflowImages[index]);
 
       if (imagesAreDifferent) {
-        updates["image-2"] = airtableImages;
+        updates["main-images"] = airtableImages;
       }
 //
       if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
