@@ -492,7 +492,8 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "city":city,
             "state":state,
             "zip":zipcode,
-            "sort-order":String(classDetails['Sort order'] || "") ,
+            // "sort-order":String(classDetails['Sort order'] || "") ,
+            "sort-orders":classDetails['Sort order'],
             "non-member": nonMemberValue,
             "number-of-remaining-seats": String(classDetails["Number of seats"]),
             "related-classes": relatedClassIds, 
@@ -1057,7 +1058,19 @@ app.post("/api/endpoint", async (req, res) => {
 
        const priceROIIName = fields["Price - ROII Participants (Select)"]?.name;
        const productTypeName = fields["Product Type"]?.name;
-      // Compare and update fields
+      
+
+      // Extract images from Airtable
+      const airtableImages = fields["Images"]?.map((imageObj) => imageObj.url) || [];
+      const webflowImages = webflowRecord.fieldData["image-2"] || [];
+      const imagesAreDifferent =
+        airtableImages.length !== webflowImages.length ||
+        airtableImages.some((image, index) => image !== webflowImages[index]);
+
+      if (imagesAreDifferent) {
+        updates["image-2"] = airtableImages;
+      }
+//
       if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
         updates["number-of-seats"] = String(fields["Number of seats"]);
       }
