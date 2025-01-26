@@ -26,7 +26,7 @@ const transporter = nodemailer.createTransport({
 
 const base2 = Airtable.base(process.env.AIRTABLE_BASE_ID);
 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET; 
+const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 
 app.use('/webhook', express.raw({ type: 'application/json' }));
@@ -85,7 +85,7 @@ app.post('/webhook', async (req, res) => {
       }
 
       // Proceed to update class and field data
-      const lastRecord = matchingRecord; 
+      const lastRecord = matchingRecord;
       const seatCount = parseInt(lastRecord.fields['Number of seat Purchased'], 10);
       // const classFieldValue = lastRecord.fields['Airtable id'];
       const classFieldValue = lastRecord.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
@@ -126,8 +126,7 @@ app.post('/webhook', async (req, res) => {
       });
 
       console.log(
-        `Class record updated. Remaining seats: ${
-          currentSeatsRemaining - seatCount
+        `Class record updated. Remaining seats: ${currentSeatsRemaining - seatCount
         }, Total purchased seats: ${totalPurchasedSeats + seatCount}`
       );
 
@@ -272,8 +271,8 @@ async function fetchNewClasses() {
     // Fetch records where {Publish / Unpublish} = 'Publish'
     const records = await airtable
       .base(AIRTABLE_BASE_ID)(AIRTABLE_TABLE_NAME)
-      .select({ 
-        filterByFormula: "{Publish / Unpublish} = 'Publish'" 
+      .select({
+        filterByFormula: "{Publish / Unpublish} = 'Publish'"
       })
       .all();
 
@@ -489,14 +488,14 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "airtablerecordid": classDetails.id,
             "member-non-member": dropdownValue,
             "member": memberValue,
-            "city":city,
-            "state":state,
-            "zip":zipcode,
+            "city": city,
+            "state": state,
+            "zip": zipcode,
             // "sort-order":String(classDetails['Sort order'] || "") ,
-            "sort-orders":classDetails['Sort order'],
+            "sort-orders": classDetails['Sort order'],
             "non-member": nonMemberValue,
             "number-of-remaining-seats": String(classDetails["Number of seats"]),
-            "related-classes": relatedClassIds, 
+            "related-classes": relatedClassIds,
           },
         },
         {
@@ -840,7 +839,7 @@ runPeriodicallyw(30 * 1000);
 
 
 // Update Airtable record with Stripe Product ID
-async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2 ,itemIds) {
+async function updateAirtableRecord(recordId, stripeInfo, generatedCode2, itemIds) {
   try {
     // Validate recordId
     if (!recordId) {
@@ -854,7 +853,7 @@ async function updateAirtableRecord(recordId, stripeInfo ,generatedCode2 ,itemId
       "Member Price ID": String(stripeInfo?.memberPrice?.id ?? "Unknown Member Price ID"),
       "Non-Member Price ID": String(stripeInfo?.nonMemberPrice?.id ?? "Unknown Non-Member Price ID"),
       "Coupon Code": generatedCode2,
-      "Publish / Unpublish":"Published"
+      "Publish / Unpublish": "Published"
     });
 
     console.log("Airtable record updated successfully!");
@@ -883,7 +882,7 @@ async function processNewClasses() {
 
   for (const classDetails of uniqueClasses) {
     try {
-      console.log(`Processing class: ${classDetails.Name}`); 
+      console.log(`Processing class: ${classDetails.Name}`);
 
       // Create Stripe product, prices, and coupon
       const stripeInfo = await createStripeProductsAndCoupon(classDetails);
@@ -1056,9 +1055,9 @@ app.post("/api/endpoint", async (req, res) => {
     for (const webflowRecord of matchingWebflowRecords) {
       const updates = {};
 
-       const priceROIIName = fields["Price - ROII Participants (Select)"]?.name;
-       const productTypeName = fields["Product Type"]?.name;
-      
+      const priceROIIName = fields["Price - ROII Participants (Select)"]?.name;
+      const productTypeName = fields["Product Type"]?.name;
+
 
       // Extract images from Airtable
       const airtableImages = fields["Images"]?.map((imageObj) => imageObj.url) || [];
@@ -1070,7 +1069,20 @@ app.post("/api/endpoint", async (req, res) => {
       if (imagesAreDifferent) {
         updates["main-images"] = airtableImages;
       }
-//
+      //
+      const airtableInstructorPics = fields["Instructor Pic (from Instructors)"]?.map(
+        (picObj) => picObj.url
+      ) || [];
+      const webflowInstructorPics = webflowRecord.fieldData["instructor-pic"] || [];
+      const instructorPicsAreDifferent =
+        airtableInstructorPics.length !== webflowInstructorPics.length ||
+        airtableInstructorPics.some((pic, index) => pic !== webflowInstructorPics[index]);
+
+      if (instructorPicsAreDifferent) {
+        updates["instructor-pic"] = airtableInstructorPics;
+      }
+
+      //
       if (webflowRecord.fieldData["number-of-seats"] !== String(fields["Number of seats"])) {
         updates["number-of-seats"] = String(fields["Number of seats"]);
       }
@@ -1108,8 +1120,8 @@ app.post("/api/endpoint", async (req, res) => {
         updates["description"] = fields["Description"];
       }
 
-     if (webflowRecord.fieldData["class-type"] !== productTypeName) {
-       updates["class-type"] = productTypeName;
+      if (webflowRecord.fieldData["class-type"] !== productTypeName) {
+        updates["class-type"] = productTypeName;
       }
 
       // Handle related-classes field
@@ -1731,7 +1743,7 @@ app.post('/submit-class', async (req, res) => {
 //             pass: process.env.EMAIL_PASSWORD,
 //           },
 //         });
-    
+
 //         const userMailOptions = {
 //           from: `"BIAW Support" <${process.env.EMAIL_USER}>`,
 //           to: signEmail,
@@ -1750,7 +1762,7 @@ app.post('/submit-class', async (req, res) => {
 //           <p>Best regards,<br>BIAW Customer Support Team</p>
 //         `,
 //         };
-    
+
 //         await transporter.sendMail(userMailOptions);
 
 //     } catch (paymentError) {
@@ -2043,7 +2055,7 @@ async function syncAirtableToWebflow() {
           name: biawClassesDetails[0]?.Name || "",
           _archived: false,
           _draft: false,
-          "field-id":String(classFieldValue1),
+          "field-id": String(classFieldValue1),
           // "member-id": record.fields["Client ID"],
           "member-id": memberid,//new filed
           "mail-id": record.fields["Email"],
@@ -2059,7 +2071,7 @@ async function syncAirtableToWebflow() {
           "purchase-record-airtable-id": airtableRecordId,
           "payment-intent-2": record.fields["Payment ID"],
           "class-url": record.fields["Purchased Class url"] || "",
-          "purchase-type-2":record.fields["Booking Type"] || "",
+          "purchase-type-2": record.fields["Booking Type"] || "",
         },
       };
 
@@ -2096,7 +2108,7 @@ async function syncAirtableToWebflow() {
         }
       } else {
         try {
-          const newurl =`${webflowBaseURL}/live`
+          const newurl = `${webflowBaseURL}/live`
           await axios.post(newurl, webflowData, { headers: webflowHeaders });
           console.log(`Successfully pushed new record to Webflow.`);
         } catch (webflowError) {
@@ -2252,7 +2264,7 @@ app.post('/cancel-payment', async (req, res) => {
 
       console.log("Refund successful:", refund);
       refundId = refund.id;
-      refundAmount = (refund.amount / 100).toFixed(2); 
+      refundAmount = (refund.amount / 100).toFixed(2);
     }
 
     // Send email notification
@@ -2400,7 +2412,7 @@ BIAW Customer Support Team`,
         // Mark the user as notified in Airtable
         try {
           await base4('Joint waitlist').update(record.id, {
-            "Notified" : "Notified", // Update the Notified field
+            "Notified": "Notified", // Update the Notified field
           });
           console.log(`Marked record ${record.id} as notified.`);
         } catch (updateError) {
