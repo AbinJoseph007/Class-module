@@ -811,15 +811,15 @@ async function processNewClasses() {
 
 
 
-app.post("/api/special", (req, res) => {
-  const { id, fields } = req.body;
+// app.post("/api/special", (req, res) => {
+//   const { id, fields } = req.body;
 
-  // Log or process the received data
-  console.log("Received data:", { id, fields });
+//   // Log or process the received data
+//   console.log("Received data:", { id, fields });
 
-  // Send a response
-  res.status(200).json({ message: "Data received successfully" });
-});
+//   // Send a response
+//   res.status(200).json({ message: "Data received successfully" });
+// });
 
 // Define headers and base URLs
 const airtableBaseURL2 = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
@@ -2345,93 +2345,99 @@ async function runPeriodicallycate(intervalMs) {
 runPeriodicallycate(50 * 1000)
 
 
-// app.post('/api/special', async (req, res) => {
-//   const { id, fields } = req.body;
+app.post('/api/special', async (req, res) => {
+  const { id, fields } = req.body;
 
-//   // Log the received data to debug
-//   console.log('Received data:', { id, fields });
+  // Log the received data for debugging
+  console.log('Received data:', { id, fields });
 
-//   try {
-//     // Extract fields and prepare the necessary data
-//     const name = fields.Name || 'Untitled';
-//     const description = fields.Description || 'No description available';
-//     const mainImages = fields.Image?.[0]?.thumbnails?.large?.url || '';
-//     const roiiSpecialClassLink = fields.Link || '';
+  try {
+    // Extract fields from the received data
+    const name = fields.Name || 'Untitled';
+    const description = fields.Description || 'No description available';
+    const mainImages = fields.Image?.[0]?.thumbnails?.large?.url || '';  // Extract image URL if present
+    const roiiSpecialClassLink = fields.Link || '';  // URL for special class link
 
-//     // Loop for Member and Non-Member once
-//     for (const dropdownValue of ['Member', 'Non-Member']) {
-//       const isMember = dropdownValue === 'Member';
-//       const memberValue = isMember ? 'Yes' : 'No';
-//       const nonMemberValue = isMember ? 'No' : 'Yes';
+    // Debugging the extracted fields
+    console.log('Extracted fields:', { name, description, mainImages, roiiSpecialClassLink });
 
-//       const slug = `${name}-${dropdownValue}`.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    // Loop for both "Member" and "Non-Member" cases
+    for (const dropdownValue of ['Member', 'Non-Member']) {
+      const isMember = dropdownValue === 'Member';
+      const memberValue = isMember ? 'Yes' : 'No';
+      const nonMemberValue = isMember ? 'No' : 'Yes';
 
-//       // Webflow API request payload
-//       const webflowPayload = {
-//         fieldData: {
-//           name: name,
-//           slug: slug,
-//           description: description,
-//           'roii-special-class-link': roiiSpecialClassLink,
-//           'main-images': mainImages,
-//           member: memberValue,
-//           'non-member': nonMemberValue,
-//           'member-non-member': dropdownValue,
-//         },
-//       };
+      // Generate a slug for Webflow
+      const slug = `${name}-${dropdownValue}`.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-//       try {
-//         // Send data to Webflow
-//         const webflowResponse = await axios.post(
-//           `https://api.webflow.com/collections/${WEBFLOW_COLLECTION_ID}/items/live`,
-//           webflowPayload,
-//           {
-//             headers: {
-//               Authorization: `Bearer ${WEBFLOW_API_KEY}`,
-//               'Content-Type': 'application/json',
-//             },
-//           }
-//         );
+      // Construct the Webflow payload
+      const webflowPayload = {
+        fieldData: {
+          name: name,
+          slug: slug,
+          description: description,
+          'roii-special-class-link': roiiSpecialClassLink,
+          'main-images': mainImages,
+          member: memberValue,
+          'non-member': nonMemberValue,
+          'member-non-member': dropdownValue,
+        },
+      };
 
-//         const webflowItemId = webflowResponse.data.id; // Get CMS ID from Webflow response
-//         console.log(`Successfully added ${dropdownValue} item:`, webflowItemId);
+      try {
+        // Send the data to Webflow API
+        const webflowResponse = await axios.post(
+          `https://api.webflow.com/collections/${WEBFLOW_COLLECTION_ID}/items/live`,
+          webflowPayload,
+          {
+            headers: {
+              Authorization: `Bearer ${WEBFLOW_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-//         // Update Airtable with Webflow CMS ID
-//         const airtableUpdatePayload = {
-//           fields: {
-//             'Webflow Item ID (Member)': webflowItemId,
-//             'Webflow Item ID (Non member)': webflowItemId,
-//           },
-//         };
+        // Get the Webflow CMS item ID from the response
+        const webflowItemId = webflowResponse.data.id;
+        console.log(`Successfully added ${dropdownValue} item to Webflow:`, webflowItemId);
 
-//         await axios.patch(
-//           `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${id}`,
-//           airtableUpdatePayload,
-//           {
-//             headers: {
-//               Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-//               'Content-Type': 'application/json',
-//             },
-//           }
-//         );
+        // Construct Airtable update payload
+        const airtableUpdatePayload = {
+          fields: {
+            'Webflow Item ID (Member)': webflowItemId,
+            'Webflow Item ID (Non member)': webflowItemId,
+          },
+        };
 
-//         console.log(`Updated Airtable for ${dropdownValue} with CMS ID:`, webflowItemId);
+        // Update Airtable with the Webflow item ID
+        await axios.patch(
+          `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${id}`,
+          airtableUpdatePayload,
+          {
+            headers: {
+              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-//       } catch (webflowError) {
-//         console.error('Error syncing data to Webflow:', webflowError.response?.data || webflowError.message);
-//         throw webflowError; // Propagate the error
-//       }
-//     }
+        console.log(`Updated Airtable with Webflow CMS ID for ${dropdownValue}:`, webflowItemId);
 
-//     // Send a success response
-//     res.status(200).json({ message: 'Data processed and synced successfully.' });
+      } catch (webflowError) {
+        console.error('Error syncing data to Webflow:', webflowError.response?.data || webflowError.message);
+        throw webflowError; // Propagate the error
+      }
+    }
 
-//   } catch (error) {
-//     // Send error response if something goes wrong
-//     console.error('Error syncing data:', error.message);
-//     res.status(500).json({ message: 'Error syncing data', error: error.message });
-//   }
-// });
+    // Send a success response if everything went well
+    res.status(200).json({ message: 'Data processed and synced successfully.' });
+
+  } catch (error) {
+    // Send error response if something goes wrong
+    console.error('Error syncing data:', error.message);
+    res.status(500).json({ message: 'Error syncing data', error: error.message });
+  }
+});
 
 
 const PORT = process.env.PORT || 4000;
