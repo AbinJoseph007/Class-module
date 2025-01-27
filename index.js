@@ -2361,6 +2361,10 @@ app.post('/api/special', async (req, res) => {
     // Debugging the extracted fields
     console.log('Extracted fields:', { name, description, mainImages, roiiSpecialClassLink });
 
+    // Webflow item IDs (to be updated in Airtable later)
+    let memberItemId;
+    let nonMemberItemId;
+
     // Loop for both "Member" and "Non-Member" cases
     for (const dropdownValue of ['Member', 'Non-Member']) {
       const isMember = dropdownValue === 'Member';
@@ -2385,7 +2389,6 @@ app.post('/api/special', async (req, res) => {
       };
 
       try {
-        // Send the data to Webflow API
         const webflowResponse = await axios.post(
           `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items/live`,
           webflowPayload,
@@ -2401,32 +2404,41 @@ app.post('/api/special', async (req, res) => {
         const webflowItemId = webflowResponse.data.id;
         console.log(`Successfully added ${dropdownValue} item to Webflow:`, webflowItemId);
 
-        // // Construct Airtable update payload
-        // const airtableUpdatePayload = {
-        //   fields: {
-        //     'Webflow Item ID (Member)': webflowItemId,
-        //     'Webflow Item ID (Non member)': webflowItemId,
-        //   },
-        // };
-
-        // // Update Airtable with the Webflow item ID
-        // await axios.patch(
-        //   `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${id}`,
-        //   airtableUpdatePayload,
-        //   {
-        //     headers: {
-        //       Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-        //       'Content-Type': 'application/json',
-        //     },
-        //   }
-        // );
-
-        // console.log(`Updated Airtable with Webflow CMS ID for ${dropdownValue}:`, webflowItemId);
+        // Store the Webflow item IDs for later use in Airtable update
+        if (dropdownValue === 'Member') {
+          memberItemId = webflowItemId;
+        } else if (dropdownValue === 'Non-Member') {
+          nonMemberItemId = webflowItemId;
+        }
 
       } catch (webflowError) {
         console.error('Error syncing data to Webflow:', webflowError.response?.data || webflowError.message);
         throw webflowError; // Propagate the error
       }
+    }
+
+    // Once both Webflow item IDs are retrieved, update Airtable
+    if (memberItemId && nonMemberItemId) {
+      const airtableUpdatePayload = {
+        fields: {
+          'Webflow Item ID (Member)': memberItemId,
+          'Webflow Item ID (Non member)': nonMemberItemId,
+        },
+      };
+
+      // Update Airtable with the Webflow item IDs
+      await axios.patch(
+        `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME5}/${id}`,
+        airtableUpdatePayload,
+        {
+          headers: {
+            Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      console.log(`Updated Airtable with Webflow CMS IDs: Member - ${memberItemId}, Non-Member - ${nonMemberItemId}`);
     }
 
     // Send a success response if everything went well
