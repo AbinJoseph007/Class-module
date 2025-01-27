@@ -414,6 +414,9 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
     const imagesField = classDetails["Images"];
     const imageUrls = imagesField && imagesField.length > 0 ? imagesField.map((image) => image.url) : [];
 
+    const bannerimagesField = classDetails["Banner image"];
+    const bannerimageUrls = bannerimagesField && bannerimagesField.length > 0 ? bannerimagesField.map((image) => image.url) : [];
+
     const instructorDetails = classDetails["Instructor Details (from Instructors)"]?.[0] || "No details provided";
     const instructorCompany = classDetails["Instructor Company (from Instructors)"]?.[0] || "No company provided";
 
@@ -496,6 +499,7 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "non-member": nonMemberValue,
             "number-of-remaining-seats": String(classDetails["Number of seats"]),
             "related-classes": relatedClassIds,
+            "banner-image":bannerimageUrls
           },
         },
         {
@@ -1068,6 +1072,16 @@ app.post("/api/endpoint", async (req, res) => {
 
       if (imagesAreDifferent) {
         updates["main-images"] = airtableImages;
+      }
+//
+      const airtableBannerImages = fields["Banner image"]?.map((imageObj) => imageObj.url) || [];
+      const webflowBannerImages = webflowRecord.fieldData["banner-image"] || [];
+      const imagesAreDifferent1 =
+      airtableBannerImages.length !== webflowBannerImages.length ||
+      airtableBannerImages.some((image, index) => image !== webflowBannerImages[index]);
+
+      if (imagesAreDifferent1) {
+        updates["banner-image"] = airtableBannerImages;
       }
       //
       const airtableInstructorPics = fields["Instructor Pic (from Instructors)"]?.map(
