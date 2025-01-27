@@ -2387,7 +2387,7 @@ app.post('/api/special', async (req, res) => {
       try {
         // Send the data to Webflow API
         const webflowResponse = await axios.post(
-          `https://api.webflow.com/collections/${WEBFLOW_COLLECTION_ID}/items/live`,
+          `https://api.webflow.com/v2/collections/${WEBFLOW_COLLECTION_ID}/items/live`,
           webflowPayload,
           {
             headers: {
@@ -2401,27 +2401,27 @@ app.post('/api/special', async (req, res) => {
         const webflowItemId = webflowResponse.data.id;
         console.log(`Successfully added ${dropdownValue} item to Webflow:`, webflowItemId);
 
-        // Construct Airtable update payload
-        const airtableUpdatePayload = {
-          fields: {
-            'Webflow Item ID (Member)': webflowItemId,
-            'Webflow Item ID (Non member)': webflowItemId,
-          },
-        };
+        // // Construct Airtable update payload
+        // const airtableUpdatePayload = {
+        //   fields: {
+        //     'Webflow Item ID (Member)': webflowItemId,
+        //     'Webflow Item ID (Non member)': webflowItemId,
+        //   },
+        // };
 
-        // Update Airtable with the Webflow item ID
-        await axios.patch(
-          `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${id}`,
-          airtableUpdatePayload,
-          {
-            headers: {
-              Authorization: `Bearer ${AIRTABLE_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        // // Update Airtable with the Webflow item ID
+        // await axios.patch(
+        //   `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}/${id}`,
+        //   airtableUpdatePayload,
+        //   {
+        //     headers: {
+        //       Authorization: `Bearer ${AIRTABLE_API_KEY}`,
+        //       'Content-Type': 'application/json',
+        //     },
+        //   }
+        // );
 
-        console.log(`Updated Airtable with Webflow CMS ID for ${dropdownValue}:`, webflowItemId);
+        // console.log(`Updated Airtable with Webflow CMS ID for ${dropdownValue}:`, webflowItemId);
 
       } catch (webflowError) {
         console.error('Error syncing data to Webflow:', webflowError.response?.data || webflowError.message);
