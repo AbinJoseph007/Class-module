@@ -168,7 +168,7 @@ app.post('/webhook', async (req, res) => {
           <li>Location : ${paltform}</li>
         </ul>
         <p>We look forward to seeing you in class!</p>
-        <p>Best regards,<br>BIAW Customer Support Team</p>
+        <p>Best regards,<br>BIAW Support</p>
       `,
       };
 
@@ -1063,7 +1063,7 @@ We saw that you are interested in the class "${className}" by ${instructor}. We 
 Thank you for your patience!
 
 Best regards,
-The Team`,
+BIAW Support`,
     };
 
     const adminMailOptions = {
@@ -1761,7 +1761,7 @@ app.post('/register-class', async (req, res) => {
             <li>Class Url : ${fields["class-url-2"]}</li>
           </ul>
           <p>We look forward to seeing you in class!</p>
-          <p>Best regards,<br>BIAW Customer Support Team</p>
+          <p>Best regards,<br>BIAW Support</p>
         `,
       };
 
@@ -2113,7 +2113,7 @@ app.post('/cancel-payment', async (req, res) => {
     emailBody += `
       <p>If you have any questions or need further assistance, feel free to contact us at [Support Email/Phone].</p>
       <p>Thank you for your understanding, and we hope to see you again soon.</p>
-      <p>Best regards,<br>BIAW Customer Support Team</p>
+      <p>Best regards,<br>BIAW Support</p>
     `;
 
     const mailOptions = {
@@ -2213,7 +2213,7 @@ If you have any questions or need further assistance, feel free to contact us at
 Thank you for your understanding and patience, and we hope to see you again soon.
 
 Best regards,
-BIAW Customer Support Team`,
+BIAW Support`,
         };
 
         await transporter.sendMail(message);
