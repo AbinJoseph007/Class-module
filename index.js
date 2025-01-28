@@ -847,16 +847,12 @@ app.post("/api/delete", async (req, res) => {
         }
       }
 
-      // Mark Airtable record as "Deleted"
+      // Delete the Airtable record
       try {
-        await axios.patch(
-          `${airtableBaseURLs}/${airtableId}`,
-          { fields: { "Publish / Unpublish": "Deleted" } },
-          { headers: airtableHeaderss }
-        );
-        console.log(`Marked Airtable record ${airtableId} as "Deleted".`);
+        await axios.delete(`${airtableBaseURLs}/${airtableId}`, { headers: airtableHeaderss });
+        console.log(`Deleted Airtable record ${airtableId}.`);
       } catch (error) {
-        console.error(`Error updating Airtable record ${airtableId}:`, error.message);
+        console.error(`Error deleting Airtable record ${airtableId}:`, error.message);
       }
     }
 
