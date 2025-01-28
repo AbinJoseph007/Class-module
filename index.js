@@ -814,7 +814,13 @@ app.post("/api/delete", async (req, res) => {
   try {
     const { id, fields } = req.body; // Airtable payload
     const airtableId = id;
-    const publishStatus = fields["Publish / Unpublish"];
+
+    if (!fields || !fields["Publish / Unpublish"]) {
+      return res.status(400).send("Missing required fields in the payload.");
+    }
+
+    // Extract publish status
+    const publishStatus = fields["Publish / Unpublish"]?.name; // Access 'name' from the object
 
     console.log(`Webhook received for Airtable ID: ${airtableId}, Status: ${publishStatus}`);
 
