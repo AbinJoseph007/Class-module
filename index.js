@@ -1537,6 +1537,138 @@ const webflowHeaders = {
   Accept: "application/json",
 };
 
+// async function syncAirtableToWebflow() {
+//   try {
+//     // Fetch Airtable data
+//     const airtableResponse = await axios.get(airtableBaseURL, { headers: airtableHeaders });
+//     const airtableRecords = airtableResponse.data.records;
+
+//     console.log(`Fetched ${airtableRecords.length} records from Airtable.`);
+
+//     // Fetch existing Webflow records
+//     let existingWebflowRecords = [];
+//     try {
+//       const webflowResponse = await axios.get(webflowBaseURL, { headers: webflowHeaders });
+//       existingWebflowRecords = webflowResponse.data.items || [];
+//     } catch (webflowError) {
+//       console.error("Error fetching records from Webflow:", webflowError.response?.data || webflowError.message);
+//     }
+
+//     const webflowRecordIds = new Set(
+//       existingWebflowRecords.map(record => record.fieldData["purchase-record-airtable-id"])
+//     );
+
+//     for (const record of airtableRecords) {
+//       const airtableRecordId = record.id;
+//       const paymentStatus = record.fields["Payment Status"];
+//       const refundConfirmation = record.fields["Refund Confirmation"];
+
+//       // Skip records with "Payment Status" as "Pending"
+//       if (paymentStatus === "Pending") {
+//         console.log(`Skipping record with Airtable ID ${airtableRecordId} due to Pending Payment Status.`);
+//         continue;
+//       }
+
+//       // Check if "Refund Confirmation" is required
+//       const requiresRefundConfirmation = ["ROII-Cancelled", "Cancelled Without Refund", "Refunded"].includes(paymentStatus);
+//       if (requiresRefundConfirmation && refundConfirmation !== "Confirmed") {
+//         console.log(
+//           `Skipping record with Airtable ID ${airtableRecordId} as "Refund Confirmation" is not Confirmed for Payment Status: ${paymentStatus}.`
+//         );
+//         continue;
+//       }
+
+//       console.log(`Processing record with Airtable ID ${airtableRecordId} for Payment Status: ${paymentStatus}.`);
+
+//       const biawClassesDetails = [];
+//       if (record.fields["Biaw Classes"]) {
+//         for (const classId of record.fields["Biaw Classes"]) {
+//           try {
+//             const classResponse = await axios.get(`${airtableBaseURL}/${classId}`, { headers: airtableHeaders });
+//             biawClassesDetails.push(classResponse.data.fields);
+//           } catch (classError) {
+//             console.error(`Error fetching Biaw Class details for ID ${classId}:`, classError.response?.data || classError.message);
+//           }
+//         }
+//       }
+
+//       // console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
+//       const memberid = record.fields["Member ID (from User ID)"]?.[0] || "No details provided"; //new feild
+//       const classFieldValue1 = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
+
+//       const webflowData = {
+//         fieldData: {
+//           name: biawClassesDetails[0]?.Name || "",
+//           _archived: false,
+//           _draft: false,
+//           "field-id": String(classFieldValue1),
+//           // "member-id": record.fields["Client ID"],
+//           "member-id": memberid,//new filed
+//           "mail-id": record.fields["Email"],
+//           "total-amount": record.fields["Amount Total"] || "Free",
+//           "purchase-class-name": biawClassesDetails[0]?.Name || "",
+//           "purchased-class-end-date": biawClassesDetails[0]?.["End date"] || "",
+//           "purchased-class-end-time": biawClassesDetails[0]?.["End Time"] || "",
+//           "purchased-class-start-date": biawClassesDetails[0]?.Date || "",
+//           "purchased-class-start-time": biawClassesDetails[0]?.["Start Time"] || "",
+//           "payment-status": paymentStatus,
+//           "banner-image": biawClassesDetails[0]?.Images?.[0]?.url || "",
+//           "number-of-purchased-seats": String(record.fields["Number of seat Purchased"]),
+//           "purchase-record-airtable-id": airtableRecordId,
+//           "payment-intent-2": record.fields["Payment ID"],
+//           "class-url": record.fields["Purchased Class url"] || "",
+//           "purchase-type-2": record.fields["Booking Type"] || "",
+//         },
+//       };
+
+//       // Check if the record already exists in Webflow
+//       if (webflowRecordIds.has(airtableRecordId)) {
+//         const webflowRecord = existingWebflowRecords.find(r => r.fieldData["purchase-record-airtable-id"] === airtableRecordId);
+
+//         const fieldsToUpdate = {};
+//         let needsUpdate = false;
+
+//         for (const field in webflowData.fieldData) {
+//           if (field === "banner-image") continue;
+
+//           const webflowFieldValue = String(webflowRecord.fieldData[field] || "").trim();
+//           const airtableFieldValue = String(webflowData.fieldData[field] || "").trim();
+
+//           if (webflowFieldValue !== airtableFieldValue) {
+//             needsUpdate = true;
+//             fieldsToUpdate[field] = webflowData.fieldData[field];
+//           }
+//         }
+
+//         if (needsUpdate) {
+//           console.log(`Record with Airtable ID ${airtableRecordId} has changes. Updating the following fields: ${Object.keys(fieldsToUpdate).join(", ")}`);
+//           try {
+//             const updateURL = `${webflowBaseURL}/${webflowRecord.id}/live`;
+//             await axios.patch(updateURL, { fieldData: fieldsToUpdate }, { headers: webflowHeaders });
+//             console.log(`Successfully updated record in Webflow.`);
+//           } catch (webflowError) {
+//             console.error(`Error updating record in Webflow:`, webflowError.response?.data || webflowError.message);
+//           }
+//         } else {
+//           console.log(`Record with Airtable ID ${airtableRecordId} is up to date in Webflow. No update needed.`);
+//         }
+//       } else {
+//         try {
+//           const newurl = `${webflowBaseURL}/live`
+//           await axios.post(newurl, webflowData, { headers: webflowHeaders });
+//           console.log(`Successfully pushed new record to Webflow.`);
+//         } catch (webflowError) {
+//           console.error(`Error pushing new record to Webflow:`, webflowError.response?.data || webflowError.message);
+//         }
+//       }
+//     }
+//   } catch (airtableError) {
+//     console.error(`Error fetching data from Airtable:`, airtableError.response?.data || airtableError.message);
+//   }
+// }
+
+
+
 async function syncAirtableToWebflow() {
   try {
     // Fetch Airtable data
@@ -1580,6 +1712,7 @@ async function syncAirtableToWebflow() {
 
       console.log(`Processing record with Airtable ID ${airtableRecordId} for Payment Status: ${paymentStatus}.`);
 
+      // Retrieve details of "Biaw Classes"
       const biawClassesDetails = [];
       if (record.fields["Biaw Classes"]) {
         for (const classId of record.fields["Biaw Classes"]) {
@@ -1592,9 +1725,8 @@ async function syncAirtableToWebflow() {
         }
       }
 
-      // console.log(`Retrieved Biaw Classes details:`, biawClassesDetails);
-      const memberid = record.fields["Member ID (from User ID)"]?.[0] || "No details provided"; //new feild
-      const classFieldValue1 = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided"; //new feild
+      const memberId = record.fields["Member ID (from User ID)"]?.[0] || "No details provided";
+      const classFieldValue1 = record.fields["Field ID (from Biaw Classes)"]?.[0] || "No details provided";
 
       const webflowData = {
         fieldData: {
@@ -1602,8 +1734,7 @@ async function syncAirtableToWebflow() {
           _archived: false,
           _draft: false,
           "field-id": String(classFieldValue1),
-          // "member-id": record.fields["Client ID"],
-          "member-id": memberid,//new filed
+          "member-id": memberId,
           "mail-id": record.fields["Email"],
           "total-amount": record.fields["Amount Total"] || "Free",
           "purchase-class-name": biawClassesDetails[0]?.Name || "",
@@ -1623,16 +1754,24 @@ async function syncAirtableToWebflow() {
 
       // Check if the record already exists in Webflow
       if (webflowRecordIds.has(airtableRecordId)) {
-        const webflowRecord = existingWebflowRecords.find(r => r.fieldData["purchase-record-airtable-id"] === airtableRecordId);
+        const webflowRecord = existingWebflowRecords.find(
+          r => r.fieldData["purchase-record-airtable-id"] === airtableRecordId
+        );
 
         const fieldsToUpdate = {};
         let needsUpdate = false;
 
         for (const field in webflowData.fieldData) {
-          if (field === "banner-image") continue;
+          if (field === "banner-image") continue; // Skip non-updatable field
 
           const webflowFieldValue = String(webflowRecord.fieldData[field] || "").trim();
           const airtableFieldValue = String(webflowData.fieldData[field] || "").trim();
+
+          // Skip fields that are being cleared
+          if (!airtableFieldValue && webflowFieldValue) {
+            console.log(`Skipping field "${field}" as it cannot be cleared.`);
+            continue;
+          }
 
           if (webflowFieldValue !== airtableFieldValue) {
             needsUpdate = true;
@@ -1641,7 +1780,7 @@ async function syncAirtableToWebflow() {
         }
 
         if (needsUpdate) {
-          console.log(`Record with Airtable ID ${airtableRecordId} has changes. Updating the following fields: ${Object.keys(fieldsToUpdate).join(", ")}`);
+          console.log(`Record with Airtable ID ${airtableRecordId} has changes. Updating fields: ${Object.keys(fieldsToUpdate).join(", ")}`);
           try {
             const updateURL = `${webflowBaseURL}/${webflowRecord.id}/live`;
             await axios.patch(updateURL, { fieldData: fieldsToUpdate }, { headers: webflowHeaders });
@@ -1650,12 +1789,12 @@ async function syncAirtableToWebflow() {
             console.error(`Error updating record in Webflow:`, webflowError.response?.data || webflowError.message);
           }
         } else {
-          console.log(`Record with Airtable ID ${airtableRecordId} is up to date in Webflow. No update needed.`);
+          console.log(`Record with Airtable ID ${airtableRecordId} is up to date in Webflow.`);
         }
       } else {
         try {
-          const newurl = `${webflowBaseURL}/live`
-          await axios.post(newurl, webflowData, { headers: webflowHeaders });
+          const createURL = `${webflowBaseURL}/live`;
+          await axios.post(createURL, webflowData, { headers: webflowHeaders });
           console.log(`Successfully pushed new record to Webflow.`);
         } catch (webflowError) {
           console.error(`Error pushing new record to Webflow:`, webflowError.response?.data || webflowError.message);
@@ -1666,7 +1805,6 @@ async function syncAirtableToWebflow() {
     console.error(`Error fetching data from Airtable:`, airtableError.response?.data || airtableError.message);
   }
 }
-
 
 syncAirtableToWebflow();
 
