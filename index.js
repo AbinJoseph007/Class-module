@@ -1602,6 +1602,12 @@ async function syncAirtableToWebflow() {
       const airtableRecordId = record.id;
       const paymentStatus = record.fields["Payment Status"];
       const refundConfirmation = record.fields["Refund Confirmation"];
+      const adminClassBooking = record.fields["Admin class booking"];
+  
+      if (adminClassBooking === "Rejected") {
+      console.log(`Skipping record with Airtable ID ${airtableRecordId} due to Admin class booking being Rejected.`);
+      continue;
+      }
 
       // Skip records with "Payment Status" as "Pending"
       if (paymentStatus === "Pending") {
