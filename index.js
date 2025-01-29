@@ -905,6 +905,15 @@ app.post("/api/endpoint", async (req, res) => {
         updates["class-type"] = productTypeName;
       }
 
+      // Extract city details
+      const city1 = fields["City (from Location 2)"]?.join(", ");;
+
+      // Compare and update city field in Webflow
+      if (webflowRecord.fieldData["city"] !== city1) {
+      updates["city"] = city1;
+      }
+
+
       // Handle related-classes field
       const id1 = fields["Item Id (from Related Classes )"] || null;
       const id2 = fields["Item Id 2 (from Related Classes )"] || null;
@@ -928,6 +937,7 @@ app.post("/api/endpoint", async (req, res) => {
       const instructname = fields["Instructor Name (from Instructors)"]?.join(", ");
       const instructcompany = fields["Instructor Company (from Instructors)"]?.join(", ");
       const instructdetails = fields["Instructor Details (from Instructors)"]?.join(", ");
+      
       if (webflowRecord.fieldData["instructor-name"] !== instructname) {
         updates["instructor-name"] = instructname;
       }
