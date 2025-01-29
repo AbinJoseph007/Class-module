@@ -111,7 +111,8 @@ app.post('/webhook', async (req, res) => {
       const totalPurchasedSeats = parseInt(classRecord.fields['Total Number of Purchased Seats'] || '0', 10);
       const className = classRecord.fields['Name'];
       const instructorName = classRecord.fields['Instructor Name (from Instructors)'];
-      const paltform = classRecord.fields['location'];
+      const paltform = classRecord.fields["Local Association Name (from Location 2)"]?.[0] || "No details provided";
+
       const discription = classRecord.fields['Description']
 
       if (currentSeatsRemaining < seatCount) {
@@ -1336,6 +1337,8 @@ app.post('/register-class', async (req, res) => {
 
     let currentSeatsRemaining = parseInt(biawClassRecord.fields["Number of seats remaining"], 10);
     let totalPurchasedSeats = parseInt(biawClassRecord.fields["Total Number of Purchased Seats"] || "0", 10);
+    const classlocation = biawClassRecord.fields["Local Association Name (from Location 2)"]?.[0] || "No details provided";
+
 
     if (currentSeatsRemaining < seatCount) {
       return res.status(400).send({ message: "Not enough seats available for this class." });
@@ -1401,7 +1404,7 @@ app.post('/register-class', async (req, res) => {
           <p>description : ${biawClassRecord.fields['Description']}</p>
           <ul>
             <li>Number of Seats Purchased: ${seatCount}</li>
-            <li>Location : ${biawClassRecord.fields['location']}</li>
+            <li>Location : ${classlocation}</li>
             <li>Class Url : ${fields["class-url-2"]}</li>
           </ul>
           <p>We look forward to seeing you in class!</p>
