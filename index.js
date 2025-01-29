@@ -881,6 +881,9 @@ app.post("/api/endpoint", async (req, res) => {
       if (webflowRecord.fieldData["end-time"] !== fields["End Time"]) {
         updates["end-time"] = fields["End Time"];
       }
+      if (webflowRecord.fieldData["sort-orders"] !== fields["Sort order"]) {
+        updates["sort-orders"] = fields["Sort order"];
+      }
       if (webflowRecord.fieldData["date"] !== fields["Date"]) {
         updates["date"] = fields["Date"];
       }
