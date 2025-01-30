@@ -2245,15 +2245,14 @@ app.post('/api/special', async (req, res) => {
 
 
 app.post("/api/mail", async (req, res) => {
-  try {
-      const { id, fields } = req.body;
 
-      if (!id || !fields || !fields["Email"]) {
-          return res.status(400).json({ error: "Missing record ID or email field" });
-      }
+  const { id, fields } = req.body;
+
+  // Log the received data for debugging
+  console.log('Received data:', { id, fields });
+  try {
 
       const email = fields["Email"];
-      // const className = fields["Name"] || "your class";
       const paymentStatus = fields["Payment Status"];
 
       if (paymentStatus !== "Pending") {
