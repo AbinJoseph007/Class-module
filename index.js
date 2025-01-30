@@ -2299,56 +2299,6 @@ app.post("/api/mail", async (req, res) => {
   }
 });
 
-
-// Received data: {
-//   id: 'recmlw4a14dCp8ytS',
-//   fields: {
-//     Name: 'abin',
-//     'Payment ID': null,
-//     'Client ID': null,
-//     'Amount Total': null,
-//     'Client name': 'abin',
-//     'ROII member': 'No',
-//     Email: 'abin@seattlenewmedia.com',
-//     'Biaw Classes': [ [Object] ],
-//     'Multiple Class Registration': [ [Object] ],
-//     'Airtable id': '497',
-//     'Payment Status': { id: 'sel0N0cmELYeqhUa2', name: 'Pending', color: 'tealLight2' },
-//     'Time Stamp': null,
-//     'Number of seat Purchased': 1,
-//     'Self Purchase': null,
-//     'Payment record id': null,
-//     Created: '2025-01-30T17:07:43.000Z',
-//     'Last Modified': '2025-01-30T17:24:00.000Z',
-//     'Refund Confirmation': null,
-//     'ROII Member Activity Airtbale Record ID ': null,
-//     'ROII class Registration Airtbale Record ID': null,
-//     'Payment Refund & Cancellation Status': null,
-//     'Initial Payment status (RoII, Paid, Pending)': null,
-//     'Purchased Class url': 'https://biaw-stage-api.webflow.io/classes/dev--member',
-//     'Booking Type': {
-//       id: 'selBhssUaOlJqKDAk',
-//       name: 'User booked',
-//       color: 'purpleBright'
-//     },
-//     'Biaw Classes (from Multiple Class Registration)': [ '2025-01-24' ],
-//     'Name (from Biaw Classes)': [ 'Dev 3 Test' ],
-//     'Location (from Biaw Classes)': [ 'Online' ],
-//     Description: [
-//       'B In this two-day online certified training program, you will learn how to control costs, prevent erosion, protect water quality and comply with permit requirements. Participants completing this class will receive certification as a Certified Erosion and Sediment Control Lead (CESCL) good for three years. Why do you need a CESCL? If your project disturbs over an acre of land, is in a subdivision, or poses a risk of stormwater runoff entering a waterway, you will need a Construction Stormwater General Permit from the Department of Ecology. This permit states that all projects disturbing one acre or more of land must have a CESCL. The CESCL is trained to inspect, install and manage stormwater controls on your site. Ecology requires a CESCL to be on-call at all times, so most companies will need more than one employee trained as a CESCL. Instructor: Department of Ecology Certified Instructor, Alex Zimmerman, Creative Courses LLC Note: You will receive the online class meeting info and a book link the day before the start of class. It will be sent to the email used during registration. To receive your CESCL card and credit for the class, you must sign in for the entire scheduled class time and complete the test at the end.'
-//     ],
-//     'Admin class booking': null,
-//     'User ID': [ [Object] ],
-//     'Member ID (from User ID)': [ 'mem_sb_cm4vi5sgp0cew0slm7zmv6au9' ],
-//     'Company Name': [ 'seattlenewmedia' ],
-//     'Last Name': [ 'joseph' ],
-//     'First Name': [ 'abin' ],
-//     'Field ID (from Biaw Classes)': [ 497 ],
-//     Mail: null,
-//     'Reminder Time': 'Yes'
-//   }
-// }
-
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
