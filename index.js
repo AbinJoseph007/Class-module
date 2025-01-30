@@ -496,7 +496,6 @@ async function addToWebflowCMS(classDetails, stripeInfo) {
             "city": city,
             "state": state,
             "zip": zipcode,
-            // "sort-order":String(classDetails['Sort order'] || "") ,
             "sort-orders": classDetails['Sort order'],
             "non-member": nonMemberValue,
             "number-of-remaining-seats": String(classDetails["Number of seats"]),
@@ -771,16 +770,6 @@ app.post("/api/delete", async (req, res) => {
   }
 });
 
-
-// app.post("/api/special", (req, res) => {
-//   const { id, fields } = req.body;
-
-//   // Log or process the received data
-//   console.log("Received data:", { id, fields });
-
-//   // Send a response
-//   res.status(200).json({ message: "Data received successfully" });
-// });
 
 // Define headers and base URLs
 const airtableBaseURL2 = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE_NAME}`;
@@ -2130,9 +2119,7 @@ async function syncCategoriesToWebflow() {
   }
 }
 
-
 syncCategoriesToWebflow();
-
 
 async function runPeriodicallycate(intervalMs) {
   console.log("Starting periodic sync...");
@@ -2157,9 +2144,11 @@ app.post('/api/special', async (req, res) => {
     const description = fields.Description || 'No description available';
     const mainImages = fields.Image?.[0]?.thumbnails?.large?.url || '';  // Extract image URL if present
     const roiiSpecialClassLink = fields.Link || '';  // URL for special class link
+    const startDate = fields['Start Date'] || '';  // Extract start date
+    const endDate = fields['End Date'] || '';
 
     // Debugging the extracted fields
-    console.log('Extracted fields:', { name, description, mainImages, roiiSpecialClassLink });
+    console.log('Extracted fields:', { name, description, mainImages, roiiSpecialClassLink ,startDate ,endDate });
 
     // Webflow item IDs (to be updated in Airtable later)
     let memberItemId;
@@ -2185,7 +2174,9 @@ app.post('/api/special', async (req, res) => {
           member: memberValue,
           'non-member': nonMemberValue,
           'member-non-member': dropdownValue,
-          "banner-image":mainImages
+          "banner-image":mainImages,
+           date: startDate, 
+          'end-date': endDate ,
         },
       };
 
