@@ -2244,6 +2244,53 @@ app.post('/api/special', async (req, res) => {
 });
 
 
+app.post("/api/mail", async (req, res) => {
+  try {
+      const { id, fields } = req.body;
+
+      if (!id || !fields || !fields["Email"]) {
+          return res.status(400).json({ error: "Missing record ID or email field" });
+      }
+
+      const email = fields["Email"];
+      // const className = fields["Name"] || "your class";
+      const paymentStatus = fields["Payment Status"];
+
+      if (paymentStatus !== "Pending") {
+          return res.status(400).json({ error: "Payment is not pending" });
+      }
+
+      // Send email
+      const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: email,
+          subject: "Reminder: Complete Your Payment",
+          text: `Hi, you registered for "" but haven't completed your payment. Please complete it to confirm your seat.`,
+      };
+
+      await transporter.sendMail(mailOptions);
+
+      console.log(`Email sent to ${email}`);
+
+      // ✅ Update Airtable field "Mail" to "Mailed"
+      await base(process.env.AIRTABLE_TABLE_NAME3).update([
+          {
+              id: id,
+              fields: {
+                  Mail: "Mailed",
+              },
+          },
+      ]);
+
+      console.log(`Updated Airtable record ${id}: "Mail" set to "Mailed"`);
+
+      res.status(200).json({ message: "Email sent and Airtable updated" });
+  } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
