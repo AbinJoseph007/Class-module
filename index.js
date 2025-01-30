@@ -2253,7 +2253,7 @@ app.post("/api/mail", async (req, res) => {
   try {
 
       const email = fields["Email"];
-      const paymentStatus = fields["Payment Status"];
+      const paymentStatus = fields["Payment Status"]?.name;; 
 
       if (paymentStatus !== "Pending") {
           return res.status(400).json({ error: "Payment is not pending" });
