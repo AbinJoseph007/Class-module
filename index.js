@@ -1237,7 +1237,7 @@ app.post('/submit-class', async (req, res) => {
 
 app.post('/register-class', async (req, res) => {
   const { memberid, ...fields } = req.body;
-  const timestampField = new Date(Math.floor(Date.now() / 1000) * 1000).toISOString();
+  const timestampField = Math.floor(Date.now() / 1000).toString(); // Convert Unix timestamp to string
   
   try {
     // Validate Member ID (ensure it exists in the "Members" table)
