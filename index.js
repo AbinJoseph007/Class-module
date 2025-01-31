@@ -1237,7 +1237,7 @@ app.post('/submit-class', async (req, res) => {
 
 app.post('/register-class', async (req, res) => {
   const { memberid, ...fields } = req.body;
-  const timestampField = new Date().toISOString(); // Auto-generate timestamp
+  const timestampField = Math.floor(Date.now() / 1000); // Generate timestamp  
   
   try {
     // Validate Member ID (ensure it exists in the "Members" table)
