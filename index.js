@@ -1238,6 +1238,8 @@ app.post('/submit-class', async (req, res) => {
 app.post('/register-class', async (req, res) => {
   const { memberid, timestampField, ...fields } = req.body;
 
+  const timestampField2 = Math.floor(Date.now() / 1000);
+
   try {
     // Validate Member ID (ensure it exists in the "Members" table)
     if (!memberid) {
@@ -1299,7 +1301,7 @@ app.post('/register-class', async (req, res) => {
         "Name": Rname || "",
         "Email": Remail || "",
         "Phone Number": Rphone || "",
-        "Time Stamp": timestampField,
+        "Time Stamp": timestampField2,
         "Purchased class Airtable ID": airID,
         "Biaw Classes": [biawClassIds],
         "Payment Status": "ROII Free"
