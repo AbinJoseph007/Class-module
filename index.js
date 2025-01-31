@@ -1236,7 +1236,7 @@ app.post('/submit-class', async (req, res) => {
 
 
 app.post('/register-class', async (req, res) => {
-  const { memberid, timestampField, ...fields } = req.body;
+  const { memberid, ...fields } = req.body;
 
   try {
     // Validate Member ID (ensure it exists in the "Members" table)
@@ -1299,7 +1299,7 @@ app.post('/register-class', async (req, res) => {
         "Name": Rname || "",
         "Email": Remail || "",
         "Phone Number": Rphone || "",
-        "Time Stamp": timestampField,
+        "Time Stamp": fields['timestampField-2'],
         "Purchased class Airtable ID": airID,
         "Biaw Classes": [biawClassIds],
         "Payment Status": "ROII Free"
