@@ -956,96 +956,97 @@ app.post("/api/endpoint", async (req, res) => {
       }
 
       let memberProduct2 = null;
-let nonMemberProduct2 = null;
-let memberPriceId = null;
-let nonMemberPriceId = null;
-
-// Create both products first
-if (webflowPriceType === "Yes" && airtableMemberPrice !== webflowMemberPrice) {
-  console.log(`Member price changed: ${webflowMemberPrice} → ${airtableMemberPrice}`);
-  
-  try {
-    // Create the member product first
-    memberProduct2 = await stripe.products.create({
-      name: `Member Price for ${fields.Name}`,
-      description: `Updated member pricing for ${fields.Name}`,
-    });
-    
-    // Create the price for the member product
-    const memberPrice = await stripe.prices.create({
-      unit_amount: Math.round(Number(airtableMemberPrice) * 100),
-      currency: "usd",
-      product: memberProduct2.id,
-    });
-    
-    // Store the member price ID for later use
-    memberPriceId = memberPrice.id;
-  } catch (stripeError) {
-    console.error("Error creating new Stripe product for Member Price:", stripeError);
-  }
-}
-
-if (webflowPriceType === "No" && airtableNonMemberPrice !== webflowNonMemberPrice) {
-  console.log(`Non-Member price changed: ${webflowNonMemberPrice} → ${airtableNonMemberPrice}`);
-  
-  try {
-    // Create the non-member product first
-    nonMemberProduct = await stripe.products.create({
-      name: `Non-Member Price for ${fields.Name}`,
-      description: `Updated non-member pricing for ${fields.Name}`,
-    });
-    
-    // Create the price for the non-member product
-    const nonMemberPrice = await stripe.prices.create({
-      unit_amount: Math.round(Number(airtableNonMemberPrice) * 100),
-      currency: "usd",
-      product: nonMemberProduct2.id,
-    });
-    
-    // Store the non-member price ID for later use
-    nonMemberPriceId = nonMemberPrice.id;
-  } catch (stripeError) {
-    console.error("Error creating new Stripe product for Non-Member Price:", stripeError);
-  }
-}
-
-// Now create the coupon after both prices have been created
-let discountCoupon = null; // Store coupon ID here
-const discountPercentage = fields["% Discounts"] ? Number(fields["% Discounts"]) : 0;
-const maxDiscountedSeats = fields["Maximum discounted seat"] ? Number(fields["Maximum discounted seat"]) : 0;
-
-if (discountPercentage > 0) {
-  try {
-    // Create a single coupon for both member and non-member prices
-    const couponData = {
-      percent_off: discountPercentage,
-      duration: 'once',
-      applies_to: {
-        products: [memberProduct2.id, nonMemberProduct2.id], // Apply to both products
-      }, // The coupon is a one-time discount
-    };
-    
-    // Include max_redemptions only if maxDiscountedSeats > 0
-    if (maxDiscountedSeats > 0) {
-      couponData.max_redemptions = maxDiscountedSeats; // Limit the number of redemptions
-    }
-    
-    // Create the coupon
-    discountCoupon = await stripe.coupons.create(couponData);
-    console.log("Coupon created successfully:", discountCoupon);
-    
-    // Create a single promotion code
-    const generatedCode2 = generateRandomCode(8); // Example: kGS4ll45
-    const promotionCode = await stripe.promotionCodes.create({
-      coupon: discountCoupon.id,
-      code: generatedCode2,
-    });
-    
-    console.log(`Promotion code created: ${promotionCode.code}`);
-  } catch (couponError) {
-    console.error("Error creating Stripe coupon:", couponError);
-  }
-}
+      let nonMemberProduct2 = null;
+      let memberPriceId = null;
+      let nonMemberPriceId = null;
+      
+      // Create both products first
+      if (webflowPriceType === "Yes" && airtableMemberPrice !== webflowMemberPrice) {
+        console.log(`Member price changed: ${webflowMemberPrice} → ${airtableMemberPrice}`);
+        
+        try {
+          // Create the member product first
+          memberProduct2 = await stripe.products.create({
+            name: `Member Price for ${fields.Name}`,
+            description: `Updated member pricing for ${fields.Name}`,
+          });
+          
+          // Create the price for the member product
+          const memberPrice = await stripe.prices.create({
+            unit_amount: Math.round(Number(airtableMemberPrice) * 100),
+            currency: "usd",
+            product: memberProduct2.id, // Using memberProduct2 here
+          });
+          
+          // Store the member price ID for later use
+          memberPriceId = memberPrice.id;
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Member Price:", stripeError);
+        }
+      }
+      
+      if (webflowPriceType === "No" && airtableNonMemberPrice !== webflowNonMemberPrice) {
+        console.log(`Non-Member price changed: ${webflowNonMemberPrice} → ${airtableNonMemberPrice}`);
+        
+        try {
+          // Create the non-member product first
+          nonMemberProduct2 = await stripe.products.create({
+            name: `Non-Member Price for ${fields.Name}`,
+            description: `Updated non-member pricing for ${fields.Name}`,
+          });
+          
+          // Create the price for the non-member product
+          const nonMemberPrice = await stripe.prices.create({
+            unit_amount: Math.round(Number(airtableNonMemberPrice) * 100),
+            currency: "usd",
+            product: nonMemberProduct2.id, // Using nonMemberProduct2 here
+          });
+          
+          // Store the non-member price ID for later use
+          nonMemberPriceId = nonMemberPrice.id;
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Non-Member Price:", stripeError);
+        }
+      }
+      
+      // Now create the coupon after both prices have been created
+      let discountCoupon = null; // Store coupon ID here
+      const discountPercentage = fields["% Discounts"] ? Number(fields["% Discounts"]) : 0;
+      const maxDiscountedSeats = fields["Maximum discounted seat"] ? Number(fields["Maximum discounted seat"]) : 0;
+      
+      if (discountPercentage > 0) {
+        try {
+          // Create a single coupon for both member and non-member prices
+          const couponData = {
+            percent_off: discountPercentage,
+            duration: 'once',
+            applies_to: {
+              products: [memberProduct2.id, nonMemberProduct2.id], // Apply to both products
+            }, // The coupon is a one-time discount
+          };
+          
+          // Include max_redemptions only if maxDiscountedSeats > 0
+          if (maxDiscountedSeats > 0) {
+            couponData.max_redemptions = maxDiscountedSeats; // Limit the number of redemptions
+          }
+          
+          // Create the coupon
+          discountCoupon = await stripe.coupons.create(couponData);
+          console.log("Coupon created successfully:", discountCoupon);
+          
+          // Create a single promotion code
+          const generatedCode2 = generateRandomCode(8); // Example: kGS4ll45
+          const promotionCode = await stripe.promotionCodes.create({
+            coupon: discountCoupon.id,
+            code: generatedCode2,
+          });
+          
+          console.log(`Promotion code created: ${promotionCode.code}`);
+        } catch (couponError) {
+          console.error("Error creating Stripe coupon:", couponError);
+        }
+      }
+      
 
     
       /////////////////////////////////////////////////////////////////////////////////////////////////
