@@ -2274,7 +2274,12 @@ app.post("/api/mail", async (req, res) => {
 
           but haven't completed your payment. Please complete it to confirm your seat.
 
-          here is your class url ${purchaseclassurl} `,
+          here is your class url ${purchaseclassurl} 
+          
+          if you are already purchased please ignore this message.
+          
+          Best Regards
+          BIAW Support`,
       };
 
       await transporter.sendMail(mailOptions);
