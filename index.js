@@ -391,17 +391,29 @@ async function createStripeProductsAndCoupon(classDetails) {
   }
 }
 
-// Clean the slug by removing any non-alphabetic characters and keeping only letters and spaces
+// // Clean the slug by removing any non-alphabetic characters and keeping only letters and spaces
+// function generateSlug(classDetails, dropdownValue) {
+//   const cleanedName = classDetails.Name
+//     .replace(/[^a-zA-Z\s]/g, '')
+//     .toLowerCase()
+//     .replace(/\s+/g, '-');
+
+//   const cleanedDropdownValue = dropdownValue.toLowerCase().replace(/\s+/g, '-');
+
+//   return `${cleanedName}-${cleanedDropdownValue}`;
+// }
+
 function generateSlug(classDetails, dropdownValue) {
   const cleanedName = classDetails.Name
-    .replace(/[^a-zA-Z\s]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '') // Allow letters, numbers, and spaces
     .toLowerCase()
-    .replace(/\s+/g, '-');
+    .replace(/\s+/g, '-'); // Convert spaces to hyphens
 
   const cleanedDropdownValue = dropdownValue.toLowerCase().replace(/\s+/g, '-');
 
-  return `${cleanedName}-${cleanedDropdownValue}`;
+  return `${cleanedName}-${cleanedDropdownValue}`; // Ensures slug ends with "member" or "non-member"
 }
+
 
 // Function to add CMS class to Webflow
 async function addToWebflowCMS(classDetails, stripeInfo) {
