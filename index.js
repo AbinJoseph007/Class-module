@@ -939,63 +939,111 @@ app.post("/api/endpoint", async (req, res) => {
 
 
       //price id changes ///////////////////////////////////////////////////////////////////////////////////////
-  const webflowPriceType = webflowRecord.fieldData["member"]; // "Member" or "Non-Member"
+      const webflowPriceType = webflowRecord.fieldData["Member"]; // "Member" or "Non-Member"
 
-  const airtableMemberPrice = String(fields["Price - Member"]);
-  const webflowMemberPrice = String(webflowRecord.fieldData["price-member"]);
-  
-  const airtableNonMemberPrice = String(fields["Price - Non Member"]);
-  const webflowNonMemberPrice = String(webflowRecord.fieldData["price-non-member"]);
-
-  // ✅ Always update price values on both Webflow records
-  if (airtableMemberPrice !== webflowMemberPrice) {
-    updates["price-member"] = airtableMemberPrice;
-  }
-  if (airtableNonMemberPrice !== webflowNonMemberPrice) {
-    updates["price-non-member"] = airtableNonMemberPrice;
-  }
-
-  // ✅ Only update the price ID based on "member-non-member" value
-  if (webflowPriceType === "Yes" && airtableMemberPrice !== webflowMemberPrice) {
-    console.log(`Member price changed: ${webflowMemberPrice} → ${airtableMemberPrice}`);
-
-    try {
-      const memberProduct = await stripe.products.create({
-        name: `Member Price for ${fields.Name}`,
-        description: `Updated member pricing for ${fields.Name}`,
-      });
-
-      const memberPrice = await stripe.prices.create({
-        unit_amount: Math.round(Number(airtableMemberPrice) * 100),
-        currency: "usd",
-        product: memberProduct.id,
-      });
-
-      updates["member-price-id"] = memberPrice.id; // ✅ Update only member-price-id
-    } catch (stripeError) {
-      console.error("Error creating new Stripe product for Member Price:", stripeError);
-    }
-  }
-
-  if (webflowPriceType === "No" && airtableNonMemberPrice !== webflowNonMemberPrice) {
-    console.log(`Non-Member price changed: ${webflowNonMemberPrice} → ${airtableNonMemberPrice}`);
-
-    try {
-      const nonMemberProduct = await stripe.products.create({
-        name: `Non-Member Price for ${fields.Name}`,
-        description: `Updated non-member pricing for ${fields.Name}`,
-      });
-
-      const nonMemberPrice = await stripe.prices.create({
-        unit_amount: Math.round(Number(airtableNonMemberPrice) * 100),
-        currency: "usd",
-        product: nonMemberProduct.id,
-      });
-
-      updates["non-member-price-id"] = nonMemberPrice.id; // ✅ Update only non-member-price-id
-    } catch (stripeError) {
-      console.error("Error creating new Stripe product for Non-Member Price:", stripeError);
-    }}
+      const airtableMemberPrice = String(fields["Price - Member"]);
+      const webflowMemberPrice = String(webflowRecord.fieldData["price-member"]);
+    
+      const airtableNonMemberPrice = String(fields["Price - Non Member"]);
+      const webflowNonMemberPrice = String(webflowRecord.fieldData["price-non-member"]);
+    
+      const discountPercentage = fields["% Discounts"] ? Number(fields["% Discounts"]) : 0;
+      const maxDiscountedSeats = fields["Maximum discounted seat"] ? Number(fields["Maximum discounted seat"]) : 0;
+      let discountCoupon = null;
+    
+      let memberPriceId = webflowRecord.fieldData["member-price-id"];
+      let nonMemberPriceId = webflowRecord.fieldData["non-member-price-id"];
+    
+      // ✅ Always update price values on both Webflow records
+      if (airtableMemberPrice !== webflowMemberPrice) {
+        updates["price-member"] = airtableMemberPrice;
+      }
+      if (airtableNonMemberPrice !== webflowNonMemberPrice) {
+        updates["price-non-member"] = airtableNonMemberPrice;
+      }
+    
+      // ✅ Only update the price ID based on "member-non-member" value
+      if (webflowPriceType === "Yes" && airtableMemberPrice !== webflowMemberPrice) {
+        console.log(`Member price changed: ${webflowMemberPrice} → ${airtableMemberPrice}`);
+    
+        try {
+          const memberProduct = await stripe.products.create({
+            name: `Member Price for ${fields.Name}`,
+            description: `Updated member pricing for ${fields.Name}`,
+          });
+    
+          const memberPrice = await stripe.prices.create({
+            unit_amount: Math.round(Number(airtableMemberPrice) * 100),
+            currency: "usd",
+            product: memberProduct.id,
+          });
+    
+          memberPriceId = memberPrice.id;
+          updates["member-price-id"] = memberPriceId;
+    
+          console.log(`New Member Price ID: ${memberPriceId}`);
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Member Price:", stripeError);
+        }
+      }
+    
+      if (webflowPriceType === "No" && airtableNonMemberPrice !== webflowNonMemberPrice) {
+        console.log(`Non-Member price changed: ${webflowNonMemberPrice} → ${airtableNonMemberPrice}`);
+    
+        try {
+          const nonMemberProduct = await stripe.products.create({
+            name: `Non-Member Price for ${fields.Name}`,
+            description: `Updated non-member pricing for ${fields.Name}`,
+          });
+    
+          const nonMemberPrice = await stripe.prices.create({
+            unit_amount: Math.round(Number(airtableNonMemberPrice) * 100),
+            currency: "usd",
+            product: nonMemberProduct.id,
+          });
+    
+          nonMemberPriceId = nonMemberPrice.id;
+          updates["non-member-price-id"] = nonMemberPriceId;
+    
+          console.log(`New Non-Member Price ID: ${nonMemberPriceId}`);
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Non-Member Price:", stripeError);
+        }
+      }
+    
+      // ✅ Create a coupon if there's a discount percentage
+      if (discountPercentage > 0 && (memberPriceId || nonMemberPriceId)) {
+        try {
+          const couponData = {
+            percent_off: discountPercentage,
+            duration: "once",
+            name: `${discountPercentage}% Discount`,
+            applies_to: {
+              products: [memberPriceId, nonMemberPriceId].filter(Boolean), // Apply to existing IDs
+            },
+          };
+    
+          if (maxDiscountedSeats > 0) {
+            couponData.max_redemptions = maxDiscountedSeats;
+          }
+    
+          discountCoupon = await stripe.coupons.create(couponData);
+          console.log("Coupon created successfully:", discountCoupon);
+    
+          // Generate a random coupon code
+          const couponCode = generateRandomCode(10);
+    
+          // Update Airtable with the coupon code
+          await axios.patch(
+            `${airtableBaseURL2}/${id}`,
+            { fields: { "Coupon Code": couponCode } },
+            { headers: airtableHeaders2 }
+          );
+          console.log(`Updated Airtable record ${id} with Coupon Code: ${couponCode}`);
+        } catch (stripeError) {
+          console.error("Error creating discount coupon:", stripeError);
+        }
+      }
       /////////////////////////////////////////////////////////////////////////////////////////////////
 
       // If there are updates, send them to Webflow
@@ -1014,11 +1062,14 @@ app.post("/api/endpoint", async (req, res) => {
         console.log(`No updates needed for Webflow record ID: ${webflowRecord.id}`);
       }
     }
-
     // Mark Airtable record as updated
     await axios.patch(
       `${airtableBaseURL2}/${id}`,
-      { fields: { "Publish / Unpublish": "Updated" } },
+      { fields: { "Publish / Unpublish": "Updated",
+        "Member Price ID":memberPriceId,
+        "Non-Member Price ID":nonMemberPriceId,
+        
+       } },
       { headers: airtableHeaders2 }
     );
     console.log(`Marked Airtable record ${id} as "Updated".`);
