@@ -1007,39 +1007,39 @@ app.post("/api/endpoint", async (req, res) => {
         }
       }
       
-      // Now create the coupon after both prices have been created
-      let discountCoupon = null; // Store coupon ID here
-      const discountPercentage = fields["% Discounts"] ? Number(fields["% Discounts"]) : 0;
-      const maxDiscountedSeats = fields["Maximum discounted seat"] ? Number(fields["Maximum discounted seat"]) : 0;
+      // // Now create the coupon after both prices have been created
+      // let discountCoupon = null; // Store coupon ID here
+      // const discountPercentage = fields["% Discounts"] ? Number(fields["% Discounts"]) : 0;
+      // const maxDiscountedSeats = fields["Maximum discounted seat"] ? Number(fields["Maximum discounted seat"]) : 0;
       
-      if (discountPercentage > 0) {
-        try {
-          // Create a single coupon for both member and non-member prices
-          const couponDatas = {
-            percent_off: discountPercentage,
-            duration: 'once',
-              applies_to: {
-              products: [nonMemberProducts.id, nonMemberProducts.id], // Apply to both products
-            }, // The coupon is a one-time discount
-          };
-          if (maxDiscountedSeats > 0) {
-            couponDatas.max_redemptions = maxDiscountedSeats; // Limit the number of redemptions
-          }
+      // if (discountPercentage > 0) {
+      //   try {
+      //     // Create a single coupon for both member and non-member prices
+      //     const couponDatas = {
+      //       percent_off: discountPercentage,
+      //       duration: 'once',
+      //         applies_to: {
+      //         products: [nonMemberProducts.id, nonMemberProducts.id], // Apply to both products
+      //       }, // The coupon is a one-time discount
+      //     };
+      //     if (maxDiscountedSeats > 0) {
+      //       couponDatas.max_redemptions = maxDiscountedSeats; // Limit the number of redemptions
+      //     }
       
-          discountCoupon = await stripe.coupons.create(couponDatas);
-          console.log("Coupon created successfully:", discountCoupon);
+      //     discountCoupon = await stripe.coupons.create(couponDatas);
+      //     console.log("Coupon created successfully:", discountCoupon);
     
-          // Create a single promotion code
-          const generatedCode3 = generateRandomCode(8); // Example: kGS4ll45
-          promotionCode = await stripe.promotionCodes.create({
-            coupon: discountCoupon.id,
-            code: generatedCode3,
-          }); // Store the coupon ID for later use
-          console.log(`Coupon created: ${discountCoupon.id}`);
-        } catch (couponError) {
-          console.error("Error creating Stripe coupon:", couponError);
-        }
-      }
+      //     // Create a single promotion code
+      //     const generatedCode3 = generateRandomCode(8); // Example: kGS4ll45
+      //     promotionCode = await stripe.promotionCodes.create({
+      //       coupon: discountCoupon.id,
+      //       code: generatedCode3,
+      //     }); // Store the coupon ID for later use
+      //     console.log(`Coupon created: ${discountCoupon.id}`);
+      //   } catch (couponError) {
+      //     console.error("Error creating Stripe coupon:", couponError);
+      //   }
+      // }
       /////////////////////////////////////////////////////////////////////////////////////////////////
 
       // If there are updates, send them to Webflow
@@ -1063,7 +1063,6 @@ app.post("/api/endpoint", async (req, res) => {
     await axios.patch(
       `${airtableBaseURL2}/${id}`,
       { fields: { "Publish / Unpublish": "Updated",
-        "Coupon Code":generatedCode2,
        } },
       { headers: airtableHeaders2 }
     );
