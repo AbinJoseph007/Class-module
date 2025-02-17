@@ -937,6 +937,63 @@ app.post("/api/endpoint", async (req, res) => {
         updates["instructor-details"] = instructdetails;
       }
 
+
+      //price id changes ///////////////////////////////////////////////////////////////////////////////////////
+      const airtableMemberPrice = fields["Price - Member"];
+      const airtableNonMemberPrice = fields["Price - Non Member"];
+      const webflowMemberPrice = webflowRecord.fieldData["price-member"];
+      const webflowNonMemberPrice = webflowRecord.fieldData["price-non-member"];
+
+      let newMemberPriceId = null;
+      let newNonMemberPriceId = null;
+
+      if (String(airtableMemberPrice) !== String(webflowMemberPrice)) {
+        console.log(`Member price changed: ${webflowMemberPrice} → ${airtableMemberPrice}`);
+
+        try {
+          const memberProduct = await stripe.products.create({
+            name: `${fields.Name} - Member`,
+            description: `Updated member pricing for ${fields.Name}`,
+          });
+
+          const memberPrice = await stripe.prices.create({
+            unit_amount: Math.round(airtableMemberPrice * 100),
+            currency: "usd",
+            product: memberProduct.id,
+          });
+
+          newMemberPriceId = memberPrice.id;
+          updates["price-member"] = airtableMemberPrice;
+          updates["member-price-id"] = newMemberPriceId;
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Member Price:", stripeError);
+        }
+      }
+
+      if (String(airtableNonMemberPrice) !== String(webflowNonMemberPrice)) {
+        console.log(`Non-Member price changed: ${webflowNonMemberPrice} → ${airtableNonMemberPrice}`);
+
+        try {
+          const nonMemberProduct = await stripe.products.create({
+            name: `${fields.Name}- Non-Member`,
+            description: `Updated non-member pricing for ${fields.Name}`,
+          });
+
+          const nonMemberPrice = await stripe.prices.create({
+            unit_amount: Math.round(airtableNonMemberPrice * 100),
+            currency: "usd",
+            product: nonMemberProduct.id,
+          });
+
+          newNonMemberPriceId = nonMemberPrice.id;
+          updates["price-non-member"] = airtableNonMemberPrice;
+          updates["non-member-price-id"] = newNonMemberPriceId;
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Non-Member Price:", stripeError);
+        }
+      }
+      /////////////////////////////////////////////////////////////////////////////////////////////////
+
       // If there are updates, send them to Webflow
       if (Object.keys(updates).length > 0) {
         const updateURL = `${webflowBaseURL2}/${webflowRecord.id}/live`;
