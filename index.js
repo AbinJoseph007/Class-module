@@ -963,7 +963,7 @@ app.post("/api/endpoint", async (req, res) => {
           });
 
           newMemberPriceId = memberPrice.id;
-          updates["price-member"] = airtableMemberPrice;
+          updates["price-member"] = String(airtableMemberPrice);
           updates["member-price-id"] = newMemberPriceId;
         } catch (stripeError) {
           console.error("Error creating new Stripe product for Member Price:", stripeError);
@@ -986,7 +986,7 @@ app.post("/api/endpoint", async (req, res) => {
           });
 
           newNonMemberPriceId = nonMemberPrice.id;
-          updates["price-non-member"] = airtableNonMemberPrice;
+          updates["price-non-member"] = String(airtableNonMemberPrice);
           updates["non-member-price-id"] = newNonMemberPriceId;
         } catch (stripeError) {
           console.error("Error creating new Stripe product for Non-Member Price:", stripeError);
