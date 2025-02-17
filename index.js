@@ -1072,7 +1072,7 @@ app.post("/api/endpoint", async (req, res) => {
     await axios.patch(
       `${airtableBaseURL2}/${id}`,
       { fields: { "Publish / Unpublish": "Updated",
-        "Coupon Code":generatedCode3,
+        "Coupon Code":generatedCode2,
        } },
       { headers: airtableHeaders2 }
     );
