@@ -391,17 +391,6 @@ async function createStripeProductsAndCoupon(classDetails) {
   }
 }
 
-// // Clean the slug by removing any non-alphabetic characters and keeping only letters and spaces
-// function generateSlug(classDetails, dropdownValue) {
-//   const cleanedName = classDetails.Name
-//     .replace(/[^a-zA-Z\s]/g, '')
-//     .toLowerCase()
-//     .replace(/\s+/g, '-');
-
-//   const cleanedDropdownValue = dropdownValue.toLowerCase().replace(/\s+/g, '-');
-
-//   return `${cleanedName}-${cleanedDropdownValue}`;
-// }
 
 function generateSlug(classDetails, dropdownValue) {
   const cleanedName = classDetails.Name
@@ -948,7 +937,70 @@ app.post("/api/endpoint", async (req, res) => {
       if (webflowRecord.fieldData["instructor-details"] !== instructdetails) {
         updates["instructor-details"] = instructdetails;
       }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      let airtableUpdates = {}; // ✅ Airtable update storage
 
+      const webflowPriceType = webflowRecord.fieldData["member"]; // "Member" or "Non-Member"
+
+      const airtableMemberPrice = String(fields["Price - Member"]);
+      const webflowMemberPrice = String(webflowRecord.fieldData["price-member"]);
+      
+      const airtableNonMemberPrice = String(fields["Price - Non Member"]);
+      const webflowNonMemberPrice = String(webflowRecord.fieldData["price-non-member"]);
+    
+      // ✅ Always update price values on both Webflow records
+      if (airtableMemberPrice !== webflowMemberPrice) {
+        updates["price-member"] = airtableMemberPrice;
+      }
+      if (airtableNonMemberPrice !== webflowNonMemberPrice) {
+        updates["price-non-member"] = airtableNonMemberPrice;
+      }
+    
+      // ✅ Only update the price ID based on "member-non-member" value
+      if (webflowPriceType === "Yes" && airtableMemberPrice !== webflowMemberPrice) {
+        console.log(`Member price changed: ${webflowMemberPrice} → ${airtableMemberPrice}`);
+    
+        try {
+          const memberProduct = await stripe.products.create({
+            name: `Member Price for ${fields.Name}`,
+            description: `Updated member pricing for ${fields.Name}`,
+          });
+    
+          const memberPrice = await stripe.prices.create({
+            unit_amount: Math.round(Number(airtableMemberPrice) * 100),
+            currency: "usd",
+            product: memberProduct.id,
+          });
+    
+          updates["member-price-id"] = memberPrice.id; // ✅ Update only member-price-id
+          airtableUpdates["Member Price ID"] = memberPrice.id; // ✅ Store for Airtable
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Member Price:", stripeError);
+        }
+      }
+    
+      if (webflowPriceType === "No" && airtableNonMemberPrice !== webflowNonMemberPrice) {
+        console.log(`Non-Member price changed: ${webflowNonMemberPrice} → ${airtableNonMemberPrice}`);
+    
+        try {
+          const nonMemberProduct = await stripe.products.create({
+            name: `Non-Member Price for ${fields.Name}`,
+            description: `Updated non-member pricing for ${fields.Name}`,
+          });
+    
+          const nonMemberPrice = await stripe.prices.create({
+            unit_amount: Math.round(Number(airtableNonMemberPrice) * 100),
+            currency: "usd",
+            product: nonMemberProduct.id,
+          });
+    
+          updates["non-member-price-id"] = nonMemberPrice.id; // ✅ Update only non-member-price-id
+          airtableUpdates["Non-Member Price ID"] = nonMemberPrice.id; // ✅ Store for Airtable
+        } catch (stripeError) {
+          console.error("Error creating new Stripe product for Non-Member Price:", stripeError);
+        }
+      }
+////////////////////////////////////////////////////////////////////////////////////////////////////
       // If there are updates, send them to Webflow
       if (Object.keys(updates).length > 0) {
         const updateURL = `${webflowBaseURL2}/${webflowRecord.id}/live`;
@@ -965,7 +1017,20 @@ app.post("/api/endpoint", async (req, res) => {
         console.log(`No updates needed for Webflow record ID: ${webflowRecord.id}`);
       }
     }
-
+///////////////////////////////////////////////////////////////////////////////////////////////////
+    if (Object.keys(airtableUpdates).length > 0) {
+      try {
+        await axios.patch(
+          `${airtableBaseURL2}/${id}`,
+          { fields: airtableUpdates },
+          { headers: airtableHeaders2 }
+        );
+        console.log(`Updated Airtable record ${id} with new Stripe price IDs.`);
+      } catch (airtableError) {
+        console.error("Error updating Airtable with new Stripe price IDs:", airtableError);
+      }
+    }
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Mark Airtable record as updated
     await axios.patch(
       `${airtableBaseURL2}/${id}`,
@@ -2282,16 +2347,16 @@ app.post("/api/mail", async (req, res) => {
           subject: "Reminder: Complete Your Payment",
           text: `Hi ${uername}, 
           
-          you registered for the class ${classname}
+ you registered for the class ${classname}
 
-          but haven't completed your payment. Please complete it to confirm your seat.
+but haven't completed your payment. Please complete it to confirm your seat.
 
-          here is your class url ${purchaseclassurl} 
+here is your class url ${purchaseclassurl} 
+
+if you are already purchased please ignore this message.
           
-          if you are already purchased please ignore this message.
-          
-          Best Regards
-          BIAW Support`,
+Best Regards
+BIAW Support`,
       };
 
       await transporter.sendMail(mailOptions);
